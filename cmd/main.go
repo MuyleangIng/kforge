@@ -12,9 +12,11 @@ import (
 
 const (
 	toolName = "kforge"
-	version  = "v0.1.0"
 	vendor   = "KhmerStack / Ing Muyleang"
 )
+
+// version is set at build time via -ldflags "-X main.version=vX.Y.Z"
+var version = "dev"
 
 // pluginMetadata is returned when Docker discovers this CLI plugin.
 type pluginMetadata struct {

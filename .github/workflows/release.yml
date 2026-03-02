@@ -9,25 +9,34 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build & Release
+  goreleaser:
+    name: Build & Release (Linux + Windows)
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  macos-dmg:
+    name: Build macOS DMG
+    runs-on: macos-latest
+    needs: goreleaser
     strategy:
       matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            suffix: linux-amd64
-          - goos: linux
-            goarch: arm64
-            suffix: linux-arm64
-          - goos: darwin
-            goarch: amd64
-            suffix: darwin-amd64
-          - goos: darwin
-            goarch: arm64
-            suffix: darwin-arm64
-
+        goarch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v4
 
@@ -37,31 +46,33 @@ jobs:
 
       - name: Build binary
         env:
-          GOOS: ${{ matrix.goos }}
+          GOOS: darwin
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" \
-            -o kforge-${{ matrix.suffix }} ./cmd/
+          VERSION=${GITHUB_REF_NAME}
+          go build \
+            -ldflags="-s -w -X main.version=${VERSION} -X github.com/MuyleangIng/kforge/commands.Version=${VERSION}" \
+            -o kforge ./cmd/
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: kforge-${{ matrix.suffix }}
-          path: kforge-${{ matrix.suffix }}
+      - name: Create DMG
+        run: |
+          VERSION=${GITHUB_REF_NAME}
+          ARCH=${{ matrix.goarch }}
+          mkdir -p staging
+          cp kforge staging/
+          hdiutil create \
+            -volname "kforge ${VERSION}" \
+            -srcfolder staging \
+            -ov -format UDZO \
+            "kforge_${VERSION}_darwin_${ARCH}.dmg"
 
-  release:
-    name: Create Release
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/kforge-*
-          generate_release_notes: true
+      - name: Upload DMG to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${GITHUB_REF_NAME}
+          ARCH=${{ matrix.goarch }}
+          gh release upload "${VERSION}" \
+            "kforge_${VERSION}_darwin_${ARCH}.dmg" \
+            --clobber

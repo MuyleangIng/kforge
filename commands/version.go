@@ -6,7 +6,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const Version = "v0.1.0"
+// Version is set at build time via -ldflags "-X github.com/MuyleangIng/kforge/commands.Version=vX.Y.Z"
+var Version = "dev"
 
 func VersionCmd() *cobra.Command {
 	return &cobra.Command{
