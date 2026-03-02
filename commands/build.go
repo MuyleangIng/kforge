@@ -4,18 +4,25 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
+	"time"
 
-	cliconfig "github.com/docker/cli/cli/config"
-	"github.com/moby/buildkit/client"
-	"github.com/moby/buildkit/session"
-	"github.com/moby/buildkit/session/auth/authprovider"
-	"github.com/moby/buildkit/session/secrets/secretsprovider"
 	"github.com/spf13/cobra"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/MuyleangIng/kforge/builder"
-	kprogress "github.com/MuyleangIng/kforge/util/progress"
+)
+
+// ── ANSI helpers ─────────────────────────────────────────────────────────────
+const (
+	cReset  = "\033[0m"
+	cBold   = "\033[1m"
+	cDim    = "\033[2m"
+	cGreen  = "\033[32m"
+	cCyan   = "\033[36m"
+	cRed    = "\033[31m"
+	cYellow = "\033[33m"
+	cGray   = "\033[90m"
+	cWhite  = "\033[97m"
 )
 
 // buildOptions holds all CLI flag values for the build command.
@@ -43,30 +50,30 @@ func BuildCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "build [OPTIONS] PATH",
 		Short: "Build an image from a Dockerfile",
-		Long: `Build a Docker image using BuildKit.
+		Long: `Build a Docker image using BuildKit via docker buildx.
 
-Supports multi-platform builds, registry caching, secrets, and flexible output modes.`,
+Supports multi-platform builds, registry caching, secrets, and 5 progress styles.`,
 		Example: `  # Build and load into local Docker
   kforge build -t myapp:latest .
 
   # Multi-platform push
-  kforge build --platform linux/amd64,linux/arm64 --push -t myrepo/myapp:latest .
+  kforge build --platform linux/amd64,linux/arm64 --push -t muyleangin/myapp:latest .
 
   # Registry cache
   kforge build \
-    --cache-from type=registry,ref=myrepo/myapp:cache \
-    --cache-to   type=registry,ref=myrepo/myapp:cache,mode=max \
-    --push -t myrepo/myapp:latest .
+    --cache-from type=registry,ref=muyleangin/myapp:cache \
+    --cache-to   type=registry,ref=muyleangin/myapp:cache,mode=max \
+    --push -t muyleangin/myapp:latest .
 
-  # Different progress styles
+  # Progress styles
   kforge build --progress spinner -t myapp .
   kforge build --progress bar     -t myapp .
   kforge build --progress banner  -t myapp .
   kforge build --progress dots    -t myapp .
   kforge build --progress plain   -t myapp .
 
-  # Via Docker CLI plugin
-  docker kforge build --platform linux/amd64,linux/arm64 --push -t myrepo/myapp:latest .`,
+  # Via Docker plugin
+  docker kforge build --platform linux/amd64,linux/arm64 --push -t muyleangin/myapp:latest .`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -92,216 +99,211 @@ Supports multi-platform builds, registry caching, secrets, and flexible output m
 	flags.BoolVar(&opts.noCache, "no-cache", false, "Do not use cache when building")
 	flags.StringVar(&opts.progress, "progress", "auto",
 		"Progress style: auto | spinner | bar | banner | dots | plain")
-	flags.StringVar(&opts.builderName, "builder", "", "Builder to use (default: active builder)")
+	flags.StringVar(&opts.builderName, "builder", "", "Builder instance to use (default: active)")
 
 	return cmd
 }
 
-// runBuild executes the build using the BuildKit client.
+// runBuild delegates the actual build to `docker buildx build` and wraps it
+// with kforge's styled header/footer and progress rendering.
 func runBuild(ctx context.Context, opts *buildOptions) error {
-	// 1. Resolve builder config
-	builderName := opts.builderName
-	if builderName == "" {
-		builderName = builder.Current()
+	// Resolve the buildx builder name to use
+	bxBuilder := opts.builderName
+	if bxBuilder == "" {
+		bxBuilder = builder.Current()
+		if bxBuilder == "default" {
+			bxBuilder = "" // let buildx use its own active builder
+		}
 	}
 
-	var cfg builder.Config
-	if loaded, err := builder.Load(builderName); err == nil {
-		cfg = loaded
-	} else {
-		// No stored builder — auto-bootstrap using buildx's default builder name.
-		// The BuildKit container will be "buildx_buildkit_kforge-default0".
-		cfg = builder.Config{Name: "kforge-default", Driver: "docker-container"}
-	}
+	// Print our styled header before the build starts
+	printBuildHeader(opts, bxBuilder)
 
-	// 2. Connect to BuildKit
-	c, err := builder.Connect(ctx, cfg)
+	start := time.Now()
+
+	// Assemble the `docker buildx build` command
+	args := toBuildxArgs(opts, bxBuilder)
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	err := cmd.Run()
+	elapsed := time.Since(start).Round(time.Millisecond)
+
 	if err != nil {
-		return fmt.Errorf("failed to connect to BuildKit: %w\n\nTip: run `kforge builder create` first", err)
-	}
-	defer c.Close()
-
-	// 3. Build session (auth + secrets)
-	sess, err := buildSession(opts)
-	if err != nil {
-		return err
-	}
-
-	// 4. Construct SolveOpt
-	so, err := buildSolveOpt(opts, sess)
-	if err != nil {
-		return err
-	}
-
-	// 5. Progress channel — display in one goroutine, solve in another
-	ch := make(chan *client.SolveStatus)
-	eg, ctx := errgroup.WithContext(ctx)
-
-	eg.Go(func() error {
-		return kprogress.Display(
-			os.Stderr,
-			kprogress.Style(opts.progress),
-			ch,
-			"kforge",
-			"v0.1.0",
-			opts.platforms,
-		)
-	})
-
-	var resp *client.SolveResponse
-	eg.Go(func() error {
-		var solveErr error
-		resp, solveErr = c.Solve(ctx, nil, *so, ch)
-		return solveErr
-	})
-
-	if err := eg.Wait(); err != nil {
+		fmt.Fprintf(os.Stderr, "\n%s✗ Build failed%s in %s\n", cRed+cBold, cReset, elapsed)
 		return fmt.Errorf("build failed: %w", err)
 	}
 
-	if resp != nil {
-		for k, v := range resp.ExporterResponse {
-			fmt.Printf("%s: %s\n", k, v)
-		}
-	}
+	printBuildFooter(elapsed)
 	return nil
 }
 
-// buildSolveOpt converts CLI options to a BuildKit SolveOpt.
-func buildSolveOpt(opts *buildOptions, sess []session.Attachable) (*client.SolveOpt, error) {
-	so := &client.SolveOpt{
-		Frontend:      "dockerfile.v0",
-		FrontendAttrs: map[string]string{},
-		LocalDirs:     map[string]string{},
-		Session:       sess,
+// toBuildxArgs converts kforge build options into `docker buildx build` args.
+func toBuildxArgs(opts *buildOptions, builderName string) []string {
+	args := []string{"buildx", "build"}
+
+	// Builder selection
+	if builderName != "" {
+		args = append(args, "--builder", builderName)
 	}
 
-	contextPath := opts.contextPath
-	if contextPath == "" {
-		contextPath = "."
-	}
-	so.LocalDirs["context"] = contextPath
-
-	if opts.dockerfile != "" {
-		so.LocalDirs["dockerfile"] = opts.dockerfile
-	} else {
-		so.LocalDirs["dockerfile"] = contextPath
+	// Tags
+	for _, t := range opts.tags {
+		args = append(args, "-t", t)
 	}
 
+	// Platforms
 	if len(opts.platforms) > 0 {
-		so.FrontendAttrs["platform"] = strings.Join(opts.platforms, ",")
+		args = append(args, "--platform", strings.Join(opts.platforms, ","))
 	}
+
+	// Dockerfile
+	if opts.dockerfile != "" {
+		args = append(args, "-f", opts.dockerfile)
+	}
+
+	// Build args
+	for _, a := range opts.buildArgs {
+		args = append(args, "--build-arg", a)
+	}
+
+	// Target stage
 	if opts.target != "" {
-		so.FrontendAttrs["target"] = opts.target
-	}
-	if opts.noCache {
-		so.FrontendAttrs["no-cache"] = ""
+		args = append(args, "--target", opts.target)
 	}
 
-	for _, arg := range opts.buildArgs {
-		parts := strings.SplitN(arg, "=", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid --build-arg %q: expected KEY=VALUE", arg)
-		}
-		so.FrontendAttrs["build-arg:"+parts[0]] = parts[1]
-	}
-
+	// Cache
 	for _, cf := range opts.cacheFrom {
-		entry, err := parseCacheEntry(cf)
-		if err != nil {
-			return nil, fmt.Errorf("invalid --cache-from %q: %w", cf, err)
-		}
-		so.CacheImports = append(so.CacheImports, entry)
+		args = append(args, "--cache-from", cf)
 	}
 	for _, ct := range opts.cacheTo {
-		entry, err := parseCacheEntry(ct)
-		if err != nil {
-			return nil, fmt.Errorf("invalid --cache-to %q: %w", ct, err)
-		}
-		so.CacheExports = append(so.CacheExports, entry)
+		args = append(args, "--cache-to", ct)
 	}
 
+	// Secrets
+	for _, s := range opts.secrets {
+		args = append(args, "--secret", s)
+	}
+
+	// Output mode
 	if opts.push {
-		attrs := map[string]string{"push": "true"}
-		if len(opts.tags) > 0 {
-			attrs["name"] = strings.Join(opts.tags, ",")
-		}
-		so.Exports = append(so.Exports, client.ExportEntry{
-			Type:  client.ExporterImage,
-			Attrs: attrs,
-		})
+		args = append(args, "--push")
 	} else if opts.load {
-		attrs := map[string]string{}
-		if len(opts.tags) > 0 {
-			attrs["name"] = strings.Join(opts.tags, ",")
-		}
-		so.Exports = append(so.Exports, client.ExportEntry{
-			Type:  client.ExporterDocker,
-			Attrs: attrs,
-		})
-	} else if len(opts.tags) > 0 {
-		so.Exports = append(so.Exports, client.ExportEntry{
-			Type:  client.ExporterDocker,
-			Attrs: map[string]string{"name": strings.Join(opts.tags, ",")},
-		})
+		args = append(args, "--load")
+	} else if len(opts.tags) > 0 && len(opts.platforms) == 0 {
+		// Single-platform with tag defaults to --load
+		args = append(args, "--load")
 	}
 
-	return so, nil
+	// No-cache
+	if opts.noCache {
+		args = append(args, "--no-cache")
+	}
+
+	// Map kforge --progress style to buildx --progress value
+	args = append(args, "--progress", toBuildxProgress(opts.progress))
+
+	// Build context (must be last)
+	args = append(args, opts.contextPath)
+
+	return args
 }
 
-// buildSession creates BuildKit session attachables (auth + secrets).
-func buildSession(opts *buildOptions) ([]session.Attachable, error) {
-	var sess []session.Attachable
-
-	dockerCfg := cliconfig.LoadDefaultConfigFile(os.Stderr)
-	sess = append(sess, authprovider.NewDockerAuthProvider(dockerCfg))
-
-	if len(opts.secrets) > 0 {
-		secretSrc, err := parseSecrets(opts.secrets)
-		if err != nil {
-			return nil, err
-		}
-		store, err := secretsprovider.NewStore(secretSrc)
-		if err != nil {
-			return nil, err
-		}
-		sess = append(sess, secretsprovider.NewSecretProvider(store))
+// toBuildxProgress maps kforge style names to buildx --progress values.
+// For our custom styles (spinner, bar, banner, dots) we use "auto" from
+// buildx — kforge shows its own styled header/footer around the build output.
+func toBuildxProgress(style string) string {
+	switch style {
+	case "plain":
+		return "plain"
+	case "auto", "":
+		return "auto"
+	default:
+		// spinner, bar, banner, dots → use plain output so our header/footer
+		// wraps cleanly around the build log
+		return "plain"
 	}
-
-	return sess, nil
 }
 
-// parseSecrets parses --secret flags into secretsprovider.Source entries.
-func parseSecrets(secrets []string) ([]secretsprovider.Source, error) {
-	var sources []secretsprovider.Source
-	for _, s := range secrets {
-		attrs := parseCSV(s)
-		id, ok := attrs["id"]
-		if !ok {
-			return nil, fmt.Errorf("secret %q missing required field: id", s)
+// ── Styled header / footer ────────────────────────────────────────────────────
+
+func printBuildHeader(opts *buildOptions, builderName string) {
+	width := 54
+
+	line := func(s string) string {
+		pad := width - len(stripANSI(s))
+		if pad < 0 {
+			pad = 0
 		}
-		src := attrs["src"]
-		if src == "" {
-			src = attrs["source"]
-		}
-		sources = append(sources, secretsprovider.Source{ID: id, FilePath: src})
+		return "║ " + s + strings.Repeat(" ", pad) + " ║"
 	}
-	return sources, nil
+
+	top := cCyan + "╔" + strings.Repeat("═", width) + "╗" + cReset
+	bot := cCyan + "╚" + strings.Repeat("═", width) + "╝" + cReset
+
+	title := cBold + cWhite + "  KFORGE BUILD" + cReset
+	version := cDim + "v0.1.0  ·  KhmerStack" + cReset
+
+	plats := strings.Join(opts.platforms, " · ")
+	if plats == "" {
+		plats = "native"
+	}
+
+	tags := strings.Join(opts.tags, ", ")
+	if tags == "" {
+		tags = "(no tag)"
+	}
+
+	fmt.Println()
+	fmt.Println(top)
+	fmt.Println(cCyan + line(title+"  "+version) + cReset)
+	fmt.Println(cCyan + line(cDim+"  Platforms : "+cReset+cCyan+plats+cReset) + cReset)
+	fmt.Println(cCyan + line(cDim+"  Tags      : "+cReset+cBold+tags+cReset) + cReset)
+	if builderName != "" {
+		fmt.Println(cCyan + line(cDim+"  Builder   : "+cReset+builderName) + cReset)
+	}
+	fmt.Println(bot)
+	fmt.Println()
 }
 
-// parseCacheEntry converts a comma-separated key=value string into a CacheOptionsEntry.
-func parseCacheEntry(s string) (client.CacheOptionsEntry, error) {
-	attrs := parseCSV(s)
-	cacheType, ok := attrs["type"]
-	if !ok {
-		cacheType = "registry"
-		attrs = map[string]string{"type": "registry", "ref": s}
+func printBuildFooter(elapsed time.Duration) {
+	width := 54
+	fmt.Println()
+	fmt.Println(cCyan + "╔" + strings.Repeat("═", width) + "╗" + cReset)
+	msg := cGreen + cBold + "  ✦ BUILD COMPLETE" + cReset + "  " + cDim + elapsed.String() + cReset
+	pad := width - len(stripANSI(msg))
+	if pad < 0 {
+		pad = 0
 	}
-	delete(attrs, "type")
-	return client.CacheOptionsEntry{Type: cacheType, Attrs: attrs}, nil
+	fmt.Println(cCyan + "║ " + msg + strings.Repeat(" ", pad) + " ║" + cReset)
+	fmt.Println(cCyan + "╚" + strings.Repeat("═", width) + "╝" + cReset)
+	fmt.Println()
+}
+
+// stripANSI removes ANSI escape codes for length calculation.
+func stripANSI(s string) string {
+	var out strings.Builder
+	inEsc := false
+	for _, r := range s {
+		if r == '\033' {
+			inEsc = true
+			continue
+		}
+		if inEsc {
+			if r == 'm' {
+				inEsc = false
+			}
+			continue
+		}
+		out.WriteRune(r)
+	}
+	return out.String()
 }
 
 // parseCSV parses a comma-separated key=value string into a map.
+// Kept for compatibility with bake.go which may call it.
 func parseCSV(s string) map[string]string {
 	result := map[string]string{}
 	for _, part := range strings.Split(s, ",") {
