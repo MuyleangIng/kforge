@@ -109,7 +109,9 @@ func runBuild(ctx context.Context, opts *buildOptions) error {
 	if loaded, err := builder.Load(builderName); err == nil {
 		cfg = loaded
 	} else {
-		cfg = builder.Config{Name: "default", Driver: "docker-container"}
+		// No stored builder — auto-bootstrap using buildx's default builder name.
+		// The BuildKit container will be "buildx_buildkit_kforge-default0".
+		cfg = builder.Config{Name: "kforge-default", Driver: "docker-container"}
 	}
 
 	// 2. Connect to BuildKit
