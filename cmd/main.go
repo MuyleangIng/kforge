@@ -56,32 +56,33 @@ func main() {
 	root := &cobra.Command{
 		Use:   toolName,
 		Short: "kforge — personal multi-platform image builder",
-		Long: `kforge — a personal Docker image build CLI powered by BuildKit.
-Founded by KhmerStack · Built by Ing Muyleang
+		Long: `kforge — Personal multi-platform image builder · KhmerStack · Ing Muyleang
 
-Works as a standalone binary AND as a Docker CLI plugin:
+  ★  Quickest way to build + push:
+       kforge push muyleangin/myapp .
+       kforge push ghcr.io/muyleangin/myapp .
+       docker kforge push muyleangin/myapp .
 
-  Standalone:    kforge build --platform linux/amd64,linux/arm64 --push -t muyleangin/app .
-  Docker plugin: docker kforge build --platform linux/amd64,linux/arm64 --push -t muyleangin/app .
+  ★  Full build control:
+       kforge build --platform linux/amd64,linux/arm64 --push -t muyleangin/app .
 
-Progress styles (--progress flag):
-  auto     auto-detect: spinner if TTY, plain otherwise  (default)
-  spinner  animated spinner + colored step names
-  bar      ASCII progress bars per Dockerfile stage
-  banner   big ASCII banner header + streaming logs
-  dots     minimal pulsing dot indicator
-  plain    raw log output, no colors
+  ★  Login to any registry:
+       kforge login                   (Docker Hub)
+       kforge login ghcr.io
+       kforge login myregistry.io
 
-Setup:
-  kforge setup   interactive wizard: QEMU emulation or multi-node builders`,
+  ★  First time setup:
+       kforge setup`,
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
 
 	root.AddCommand(
+		commands.PushCmd(),
 		commands.BuildCmd(),
 		commands.BakeCmd(),
+		commands.LoginCmd(),
 		commands.BuilderCmd(),
 		commands.SetupCmd(),
 		commands.VersionCmd(),
