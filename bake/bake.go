@@ -1,10 +1,10 @@
 // Package bake parses mybuild declarative config files.
 //
 // Supported formats:
-//   - HCL:  buildforge.hcl  (preferred)
-//   - JSON: buildforge.json
+//   - HCL:  kforge.hcl  (preferred)
+//   - JSON: kforge.json
 //
-// Example buildforge.hcl:
+// Example kforge.hcl:
 //
 //	variable "TAG" { default = "latest" }
 //
@@ -37,8 +37,8 @@ import (
 
 // DefaultFiles is the lookup order for config files.
 var DefaultFiles = []string{
-	"buildforge.hcl",
-	"buildforge.json",
+	"kforge.hcl",
+	"kforge.json",
 }
 
 // Target represents a single build target.

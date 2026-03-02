@@ -1,6 +1,6 @@
-// Package builder manages buildforge builder instances.
-// Builders are stored in ~/.buildforge/builders/ as JSON files.
-// The active builder name is tracked in ~/.buildforge/current.
+// Package builder manages kforge builder instances.
+// Builders are stored in ~/.kforge/builders/ as JSON files.
+// The active builder name is tracked in ~/.kforge/current.
 package builder
 
 import (

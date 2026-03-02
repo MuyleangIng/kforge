@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/MuyleangIng/buildforge/builder"
+	"github.com/MuyleangIng/kforge/builder"
 )
 
-// BuilderCmd returns the `buildforge builder` subcommand group.
+// BuilderCmd returns the `kforge builder` subcommand group.
 func BuilderCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "builder",
@@ -30,9 +30,9 @@ func builderCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a new builder instance",
-		Example: `  buildforge builder create --name mybuilder
-  buildforge builder create --name mybuilder --driver docker-container
-  buildforge builder create --name remote --driver remote --endpoint tcp://buildkitd:1234`,
+		Example: `  kforge builder create --name mybuilder
+  kforge builder create --name mybuilder --driver docker-container
+  kforge builder create --name remote --driver remote --endpoint tcp://buildkitd:1234`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if name == "" {
 				name = "mybuilder"
@@ -72,7 +72,7 @@ func builderLsCmd() *cobra.Command {
 				return err
 			}
 			if len(cfgs) == 0 {
-				fmt.Println("No builders found. Run: buildforge builder create")
+				fmt.Println("No builders found. Run: kforge builder create")
 				return nil
 			}
 			current := builder.Current()

@@ -6,16 +6,16 @@ import (
 	"os"
 	"strings"
 
-	"github.com/containerd/console"
 	cliconfig "github.com/docker/cli/cli/config"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/session/secrets/secretsprovider"
-	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/spf13/cobra"
-	"github.com/MuyleangIng/buildforge/builder"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/MuyleangIng/kforge/builder"
+	kprogress "github.com/MuyleangIng/kforge/util/progress"
 )
 
 // buildOptions holds all CLI flag values for the build command.
@@ -36,7 +36,7 @@ type buildOptions struct {
 	builderName string
 }
 
-// BuildCmd returns the `buildforge build` command.
+// BuildCmd returns the `kforge build` command.
 func BuildCmd() *cobra.Command {
 	opts := &buildOptions{}
 
@@ -45,20 +45,28 @@ func BuildCmd() *cobra.Command {
 		Short: "Build an image from a Dockerfile",
 		Long: `Build a Docker image using BuildKit.
 
-Supports multi-platform builds, caching, secrets, and flexible output modes.`,
+Supports multi-platform builds, registry caching, secrets, and flexible output modes.`,
 		Example: `  # Build and load into local Docker
-  buildforge build -t myapp:latest .
+  kforge build -t myapp:latest .
 
   # Multi-platform push
-  buildforge build --platform linux/amd64,linux/arm64 --push -t myrepo/myapp:latest .
+  kforge build --platform linux/amd64,linux/arm64 --push -t myrepo/myapp:latest .
 
-  # With cache
-  buildforge build --cache-from type=registry,ref=myrepo/myapp:cache \
-                --cache-to   type=registry,ref=myrepo/myapp:cache,mode=max \
-                --push -t myrepo/myapp:latest .
+  # Registry cache
+  kforge build \
+    --cache-from type=registry,ref=myrepo/myapp:cache \
+    --cache-to   type=registry,ref=myrepo/myapp:cache,mode=max \
+    --push -t myrepo/myapp:latest .
 
-  # With build args and target stage
-  buildforge build --build-arg VERSION=1.2.3 --target release -t myapp:1.2.3 .`,
+  # Different progress styles
+  kforge build --progress spinner -t myapp .
+  kforge build --progress bar     -t myapp .
+  kforge build --progress banner  -t myapp .
+  kforge build --progress dots    -t myapp .
+  kforge build --progress plain   -t myapp .
+
+  # Via Docker CLI plugin
+  docker kforge build --platform linux/amd64,linux/arm64 --push -t myrepo/myapp:latest .`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -82,7 +90,8 @@ Supports multi-platform builds, caching, secrets, and flexible output modes.`,
 	flags.BoolVar(&opts.push, "push", false, "Push image to registry after build")
 	flags.BoolVar(&opts.load, "load", false, "Load image into local Docker daemon")
 	flags.BoolVar(&opts.noCache, "no-cache", false, "Do not use cache when building")
-	flags.StringVar(&opts.progress, "progress", "auto", "Progress output: auto, plain, tty")
+	flags.StringVar(&opts.progress, "progress", "auto",
+		"Progress style: auto | spinner | bar | banner | dots | plain")
 	flags.StringVar(&opts.builderName, "builder", "", "Builder to use (default: active builder)")
 
 	return cmd
@@ -90,7 +99,7 @@ Supports multi-platform builds, caching, secrets, and flexible output modes.`,
 
 // runBuild executes the build using the BuildKit client.
 func runBuild(ctx context.Context, opts *buildOptions) error {
-	// 1. Resolve builder
+	// 1. Resolve builder config
 	builderName := opts.builderName
 	if builderName == "" {
 		builderName = builder.Current()
@@ -100,53 +109,43 @@ func runBuild(ctx context.Context, opts *buildOptions) error {
 	if loaded, err := builder.Load(builderName); err == nil {
 		cfg = loaded
 	} else {
-		// No stored builder — fall back to default docker socket
-		cfg = builder.Config{
-			Name:   "default",
-			Driver: "docker-container",
-		}
+		cfg = builder.Config{Name: "default", Driver: "docker-container"}
 	}
 
 	// 2. Connect to BuildKit
 	c, err := builder.Connect(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("failed to connect to BuildKit: %w\n\nTip: run `buildforge builder create` first", err)
+		return fmt.Errorf("failed to connect to BuildKit: %w\n\nTip: run `kforge builder create` first", err)
 	}
 	defer c.Close()
 
-	// 3. Progress display channel
-	ch := make(chan *client.SolveStatus)
-	eg, ctx := errgroup.WithContext(ctx)
-
-	eg.Go(func() error {
-		// Pick up a console if available (for TTY progress)
-		var cons console.Console
-		if opts.progress == "tty" || opts.progress == "auto" {
-			if c, err := console.ConsoleFromFile(os.Stderr); err == nil {
-				cons = c
-			}
-		}
-		// plain mode: pass nil console
-		if opts.progress == "plain" {
-			cons = nil
-		}
-		_, err := progressui.DisplaySolveStatus(ctx, cons, os.Stdout, ch)
-		return err
-	})
-
-	// 4. Build session (auth + secrets)
+	// 3. Build session (auth + secrets)
 	sess, err := buildSession(opts)
 	if err != nil {
 		return err
 	}
 
-	// 5. Construct SolveOpt
+	// 4. Construct SolveOpt
 	so, err := buildSolveOpt(opts, sess)
 	if err != nil {
 		return err
 	}
 
-	// 6. Run the build via client.Solve (nil def = use dockerfile frontend)
+	// 5. Progress channel — display in one goroutine, solve in another
+	ch := make(chan *client.SolveStatus)
+	eg, ctx := errgroup.WithContext(ctx)
+
+	eg.Go(func() error {
+		return kprogress.Display(
+			os.Stderr,
+			kprogress.Style(opts.progress),
+			ch,
+			"kforge",
+			"v0.1.0",
+			opts.platforms,
+		)
+	})
+
 	var resp *client.SolveResponse
 	eg.Go(func() error {
 		var solveErr error
@@ -175,36 +174,28 @@ func buildSolveOpt(opts *buildOptions, sess []session.Attachable) (*client.Solve
 		Session:       sess,
 	}
 
-	// Local context directory
 	contextPath := opts.contextPath
 	if contextPath == "" {
 		contextPath = "."
 	}
 	so.LocalDirs["context"] = contextPath
 
-	// Dockerfile location
 	if opts.dockerfile != "" {
 		so.LocalDirs["dockerfile"] = opts.dockerfile
 	} else {
 		so.LocalDirs["dockerfile"] = contextPath
 	}
 
-	// Platforms (multi-platform key)
 	if len(opts.platforms) > 0 {
 		so.FrontendAttrs["platform"] = strings.Join(opts.platforms, ",")
 	}
-
-	// Build target stage
 	if opts.target != "" {
 		so.FrontendAttrs["target"] = opts.target
 	}
-
-	// No-cache
 	if opts.noCache {
 		so.FrontendAttrs["no-cache"] = ""
 	}
 
-	// Build args
 	for _, arg := range opts.buildArgs {
 		parts := strings.SplitN(arg, "=", 2)
 		if len(parts) != 2 {
@@ -213,7 +204,6 @@ func buildSolveOpt(opts *buildOptions, sess []session.Attachable) (*client.Solve
 		so.FrontendAttrs["build-arg:"+parts[0]] = parts[1]
 	}
 
-	// Cache imports
 	for _, cf := range opts.cacheFrom {
 		entry, err := parseCacheEntry(cf)
 		if err != nil {
@@ -221,8 +211,6 @@ func buildSolveOpt(opts *buildOptions, sess []session.Attachable) (*client.Solve
 		}
 		so.CacheImports = append(so.CacheImports, entry)
 	}
-
-	// Cache exports
 	for _, ct := range opts.cacheTo {
 		entry, err := parseCacheEntry(ct)
 		if err != nil {
@@ -231,7 +219,6 @@ func buildSolveOpt(opts *buildOptions, sess []session.Attachable) (*client.Solve
 		so.CacheExports = append(so.CacheExports, entry)
 	}
 
-	// Exports: image push, local load, or default
 	if opts.push {
 		attrs := map[string]string{"push": "true"}
 		if len(opts.tags) > 0 {
@@ -251,7 +238,6 @@ func buildSolveOpt(opts *buildOptions, sess []session.Attachable) (*client.Solve
 			Attrs: attrs,
 		})
 	} else if len(opts.tags) > 0 {
-		// Default: load into local Docker
 		so.Exports = append(so.Exports, client.ExportEntry{
 			Type:  client.ExporterDocker,
 			Attrs: map[string]string{"name": strings.Join(opts.tags, ",")},
@@ -265,11 +251,9 @@ func buildSolveOpt(opts *buildOptions, sess []session.Attachable) (*client.Solve
 func buildSession(opts *buildOptions) ([]session.Attachable, error) {
 	var sess []session.Attachable
 
-	// Docker credential helper for registry auth (reads ~/.docker/config.json)
 	dockerCfg := cliconfig.LoadDefaultConfigFile(os.Stderr)
 	sess = append(sess, authprovider.NewDockerAuthProvider(dockerCfg))
 
-	// Secrets
 	if len(opts.secrets) > 0 {
 		secretSrc, err := parseSecrets(opts.secrets)
 		if err != nil {
@@ -286,7 +270,6 @@ func buildSession(opts *buildOptions) ([]session.Attachable, error) {
 }
 
 // parseSecrets parses --secret flags into secretsprovider.Source entries.
-// Format: id=mysecret,src=/path/to/file  OR  id=mysecret  (reads from env)
 func parseSecrets(secrets []string) ([]secretsprovider.Source, error) {
 	var sources []secretsprovider.Source
 	for _, s := range secrets {
@@ -299,21 +282,16 @@ func parseSecrets(secrets []string) ([]secretsprovider.Source, error) {
 		if src == "" {
 			src = attrs["source"]
 		}
-		sources = append(sources, secretsprovider.Source{
-			ID:       id,
-			FilePath: src,
-		})
+		sources = append(sources, secretsprovider.Source{ID: id, FilePath: src})
 	}
 	return sources, nil
 }
 
 // parseCacheEntry converts a comma-separated key=value string into a CacheOptionsEntry.
-// Example: "type=registry,ref=myrepo/cache,mode=max"
 func parseCacheEntry(s string) (client.CacheOptionsEntry, error) {
 	attrs := parseCSV(s)
 	cacheType, ok := attrs["type"]
 	if !ok {
-		// Bare string like "myrepo/cache" treated as registry ref
 		cacheType = "registry"
 		attrs = map[string]string{"type": "registry", "ref": s}
 	}

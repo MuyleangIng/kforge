@@ -1,6 +1,6 @@
-module github.com/MuyleangIng/buildforge
+module github.com/MuyleangIng/kforge
 
-go 1.21
+go 1.24.0
 
 require (
 	github.com/containerd/console v1.0.3
@@ -55,7 +55,8 @@ require (
 	golang.org/x/crypto v0.13.0 // indirect
 	golang.org/x/mod v0.12.0 // indirect
 	golang.org/x/net v0.15.0 // indirect
-	golang.org/x/sys v0.12.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/term v0.40.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.13.0 // indirect

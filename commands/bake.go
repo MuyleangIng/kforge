@@ -5,11 +5,11 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/MuyleangIng/buildforge/bake"
+	"github.com/MuyleangIng/kforge/bake"
 	"golang.org/x/sync/errgroup"
 )
 
-// BakeCmd returns the `buildforge bake` command.
+// BakeCmd returns the `kforge bake` command.
 func BakeCmd() *cobra.Command {
 	var (
 		file        string
@@ -25,21 +25,21 @@ func BakeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bake [OPTIONS] [TARGET...]",
 		Short: "Build from a bake config file",
-		Long: `Build one or more targets defined in a buildforge.hcl or buildforge.json config file.
+		Long: `Build one or more targets defined in a kforge.hcl or kforge.json config file.
 
 If no targets are specified, the "default" group is built.
 If no "default" group exists, all targets are built.`,
 		Example: `  # Build default group
-  buildforge bake
+  kforge bake
 
   # Build specific targets
-  buildforge bake app frontend
+  kforge bake app frontend
 
   # Override a field
-  buildforge bake --set app.platforms=linux/arm64
+  kforge bake --set app.platforms=linux/arm64
 
   # Use a custom file
-  buildforge bake -f ci/buildforge.hcl`,
+  kforge bake -f ci/kforge.hcl`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			targets = args
 			return runBake(cmd.Context(), file, set, targets, builderName, push, load, noCache, progress)
@@ -47,7 +47,7 @@ If no "default" group exists, all targets are built.`,
 	}
 
 	flags := cmd.Flags()
-	flags.StringVarP(&file, "file", "f", "", "Bake config file (default: buildforge.hcl or buildforge.json)")
+	flags.StringVarP(&file, "file", "f", "", "Bake config file (default: kforge.hcl or kforge.json)")
 	flags.StringArrayVar(&set, "set", nil, "Override target field (target.field=value)")
 	flags.StringVar(&builderName, "builder", "", "Builder to use (default: active builder)")
 	flags.BoolVar(&push, "push", false, "Push all images to registry (overrides per-target setting)")
