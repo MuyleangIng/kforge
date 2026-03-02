@@ -33,6 +33,58 @@ It works both as a **standalone binary** and as a **Docker CLI plugin** (`docker
 
 ## Install
 
+### macOS (Apple Silicon / arm64)
+
+```bash
+curl -Lo kforge https://github.com/MuyleangIng/kforge/releases/latest/download/kforge-darwin-arm64
+chmod +x kforge
+sudo mv kforge /usr/local/bin/
+
+# Verify
+kforge version
+```
+
+### macOS (Intel / amd64)
+
+```bash
+curl -Lo kforge https://github.com/MuyleangIng/kforge/releases/latest/download/kforge-darwin-amd64
+chmod +x kforge
+sudo mv kforge /usr/local/bin/
+
+# Verify
+kforge version
+```
+
+### Linux (amd64)
+
+```bash
+curl -Lo kforge https://github.com/MuyleangIng/kforge/releases/latest/download/kforge-linux-amd64
+chmod +x kforge
+sudo mv kforge /usr/local/bin/
+
+# Verify
+kforge version
+```
+
+### Linux (arm64)
+
+```bash
+curl -Lo kforge https://github.com/MuyleangIng/kforge/releases/latest/download/kforge-linux-arm64
+chmod +x kforge
+sudo mv kforge /usr/local/bin/
+
+# Verify
+kforge version
+```
+
+### Homebrew (coming soon)
+
+```bash
+# brew install kforge
+```
+
+### Build from source
+
 ```bash
 git clone https://github.com/MuyleangIng/kforge
 cd kforge
