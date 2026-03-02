@@ -20,7 +20,8 @@ It works both as a **standalone binary** and as a **Docker CLI plugin** (`docker
 ## Features
 
 - **Multi-platform builds** — `linux/amd64`, `linux/arm64`, and more simultaneously
-- **Docker plugin mode** — works as `docker kforge build ...`
+- **Docker plugin mode** — works as `docker kforge build ...` (same as `docker buildx`)
+- **Interactive setup wizard** — `kforge setup` guides QEMU or multi-node configuration
 - **5 progress styles** — spinner, bar, banner, dots, plain (pick at runtime)
 - **Declarative bake config** — define targets in `kforge.hcl` or `kforge.json`
 - **Flexible caching** — registry, local, S3, Azure, GitHub Actions
@@ -43,14 +44,15 @@ sudo mv kforge /usr/local/bin/
 
 ```bash
 mkdir -p ~/.docker/cli-plugins
-cp $(which kforge) ~/.docker/cli-plugins/docker-kforge
+go build -o ~/.docker/cli-plugins/docker-kforge ./cmd/
+chmod +x ~/.docker/cli-plugins/docker-kforge
 ```
 
 Now use both:
 
 ```bash
 kforge build ...           # standalone
-docker kforge build ...    # via Docker CLI
+docker kforge build ...    # via Docker CLI (just like docker buildx)
 ```
 
 ---
@@ -78,25 +80,65 @@ kforge build --progress plain   -t myapp .
 
 ---
 
+## Setup (Multi-platform wizard)
+
+Run the interactive setup wizard to configure your builder:
+
+```bash
+kforge setup
+# or via Docker plugin:
+docker kforge setup
+```
+
+The wizard guides you through:
+
+```
+  ██╗  ██╗███████╗ ██████╗ ██████╗  ██████╗ ███████╗
+  ██║ ██╔╝██╔════╝██╔═══██╗██╔══██╗██╔════╝ ██╔════╝
+  █████╔╝ █████╗  ██║   ██║██████╔╝██║  ███╗█████╗
+  ██╔═██╗ ██╔══╝  ██║   ██║██╔══██╗██║   ██║██╔══╝
+  ██║  ██╗██║     ╚██████╔╝██║  ██║╚██████╔╝███████╗
+  ╚═╝  ╚═╝╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝
+
+Choose your build strategy:
+  1) QEMU emulation      Build all platforms on one machine (easiest)
+  2) Multiple native nodes  Use separate machines per platform (fastest)
+  3) Both (recommended)  Native nodes first, QEMU as fallback
+  q) Quit
+```
+
+**Option 1 — QEMU (one machine):**
+Installs QEMU via `docker run --privileged --rm tonistiigi/binfmt --install all`
+then creates a BuildKit builder. Best for most people.
+
+**Option 2 — Multiple native nodes:**
+Prompts you for Docker context names per platform, then runs:
+```bash
+docker buildx create --use --name mybuild node-amd64
+docker buildx create --append --name mybuild node-arm64
+```
+
+---
+
 ## Usage
 
 ### Build
 
 ```bash
 # Build and load into local Docker
-kforge build -t myapp:latest .
+kforge build -t muyleangin/myapp:latest .
 
-# Docker plugin mode
-docker kforge build -t myapp:latest .
+# Docker plugin mode (same as docker buildx!)
+docker kforge build -t muyleangin/myapp:latest .
 
 # Multi-platform push
-kforge build --platform linux/amd64,linux/arm64 --push -t myrepo/myapp:latest .
+kforge build --platform linux/amd64,linux/arm64 --push -t muyleangin/myapp:latest .
 
 # Registry cache
 kforge build \
-  --cache-from type=registry,ref=myrepo/myapp:cache \
-  --cache-to   type=registry,ref=myrepo/myapp:cache,mode=max \
-  --push -t myrepo/myapp:latest .
+  --cache-from type=registry,ref=muyleangin/myapp:cache \
+  --cache-to   type=registry,ref=muyleangin/myapp:cache,mode=max \
+  --push -t muyleangin/myapp:latest .
 
 # Build args + target stage
 kforge build --build-arg VERSION=1.2.3 --target release -t myapp:1.2.3 .
@@ -116,9 +158,9 @@ target "app" {
   context    = "."
   dockerfile = "Dockerfile"
   platforms  = ["linux/amd64", "linux/arm64"]
-  tags       = ["myrepo/app:${TAG}"]
-  cache-from = ["type=registry,ref=myrepo/app:cache"]
-  cache-to   = ["type=registry,ref=myrepo/app:cache,mode=max"]
+  tags       = ["muyleangin/app:${TAG}"]
+  cache-from = ["type=registry,ref=muyleangin/app:cache"]
+  cache-to   = ["type=registry,ref=muyleangin/app:cache,mode=max"]
   push       = true
 }
 
@@ -151,7 +193,7 @@ kforge builder rm mybuilder
 
 | Type | Example |
 |---|---|
-| Registry | `type=registry,ref=myrepo/app:cache` |
+| Registry | `type=registry,ref=muyleangin/app:cache` |
 | Local | `type=local,dest=/tmp/cache` |
 | GitHub Actions | `type=gha` |
 | S3 | `type=s3,bucket=mybucket,region=us-east-1` |
