@@ -23,6 +23,63 @@ type Config struct {
 	Platforms []string `json:"platforms,omitempty"`
 }
 
+// Create provisions a Docker Buildx builder and returns the raw builder ID/name.
+func Create(ctx context.Context, cfg Config, use, bootstrap bool) (string, error) {
+	args := []string{"buildx", "create", "--name", cfg.Name}
+
+	if cfg.Driver != "" {
+		args = append(args, "--driver", cfg.Driver)
+	}
+	if len(cfg.Platforms) > 0 {
+		args = append(args, "--platform", strings.Join(cfg.Platforms, ","))
+	}
+	if bootstrap {
+		args = append(args, "--bootstrap")
+	}
+	if use {
+		args = append(args, "--use")
+	}
+
+	switch cfg.Driver {
+	case "remote":
+		if cfg.Endpoint == "" {
+			return "", fmt.Errorf("remote driver requires an endpoint")
+		}
+		args = append(args, cfg.Endpoint)
+	default:
+		if cfg.Endpoint != "" {
+			args = append(args, cfg.Endpoint)
+		}
+	}
+
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("docker %s failed: %w\n%s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// Use activates a Docker Buildx builder.
+func Use(ctx context.Context, name string) error {
+	cmd := exec.CommandContext(ctx, "docker", "buildx", "use", name)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker buildx use %s failed: %w\n%s", name, err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// RemoveBuildx removes a Docker Buildx builder instance.
+func RemoveBuildx(ctx context.Context, name string) error {
+	cmd := exec.CommandContext(ctx, "docker", "buildx", "rm", name)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker buildx rm %s failed: %w\n%s", name, err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 // ─── Storage ──────────────────────────────────────────────────────────────────
 
 func configDir() (string, error) {
@@ -145,14 +202,16 @@ func Current() string {
 // Connect returns a BuildKit client for the given builder config.
 //
 // For "docker-container" driver:
-//   The BuildKit daemon runs inside a Docker container named
-//   buildx_buildkit_<name>0  (same naming convention as docker buildx).
-//   We use the "docker-container://<name>" scheme which tells the BuildKit
-//   client to reach the daemon via the Docker API — NOT via a raw gRPC socket.
-//   The container is auto-bootstrapped if it is not already running.
+//
+//	The BuildKit daemon runs inside a Docker container named
+//	buildx_buildkit_<name>0  (same naming convention as docker buildx).
+//	We use the "docker-container://<name>" scheme which tells the BuildKit
+//	client to reach the daemon via the Docker API — NOT via a raw gRPC socket.
+//	The container is auto-bootstrapped if it is not already running.
 //
 // For "remote" driver:
-//   Connects directly to Endpoint (e.g. tcp://host:1234).
+//
+//	Connects directly to Endpoint (e.g. tcp://host:1234).
 func Connect(ctx context.Context, cfg Config) (*client.Client, error) {
 	switch cfg.Driver {
 	case "docker-container":

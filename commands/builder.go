@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/MuyleangIng/kforge/builder"
+	"github.com/spf13/cobra"
 )
 
 // BuilderCmd returns the `kforge builder` subcommand group.
@@ -26,6 +26,7 @@ func BuilderCmd() *cobra.Command {
 func builderCreateCmd() *cobra.Command {
 	var name, driver, endpoint string
 	var platforms []string
+	var use, bootstrap bool
 
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -46,8 +47,16 @@ func builderCreateCmd() *cobra.Command {
 				Endpoint:  endpoint,
 				Platforms: platforms,
 			}
+			if _, err := builder.Create(cmd.Context(), cfg, use, bootstrap); err != nil {
+				return err
+			}
 			if err := builder.Save(cfg); err != nil {
 				return fmt.Errorf("failed to save builder: %w", err)
+			}
+			if use {
+				if err := builder.SetCurrent(name); err != nil {
+					return err
+				}
 			}
 			fmt.Printf("Builder %q created (driver: %s)\n", name, driver)
 			return nil
@@ -59,6 +68,8 @@ func builderCreateCmd() *cobra.Command {
 	flags.StringVar(&driver, "driver", "docker-container", "Driver to use: docker-container, remote")
 	flags.StringVar(&endpoint, "endpoint", "", "Driver endpoint (for remote driver)")
 	flags.StringSliceVar(&platforms, "platform", nil, "Fixed platforms for this builder")
+	flags.BoolVar(&use, "use", true, "Set the builder as active after creating it")
+	flags.BoolVar(&bootstrap, "bootstrap", true, "Bootstrap the builder immediately")
 	return cmd
 }
 
@@ -104,6 +115,9 @@ func builderUseCmd() *cobra.Command {
 			if _, err := builder.Load(name); err != nil {
 				return err
 			}
+			if err := builder.Use(cmd.Context(), name); err != nil {
+				return err
+			}
 			if err := builder.SetCurrent(name); err != nil {
 				return err
 			}
@@ -120,6 +134,9 @@ func builderRmCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
+			if err := builder.RemoveBuildx(cmd.Context(), name); err != nil {
+				return err
+			}
 			if err := builder.Remove(name); err != nil {
 				return fmt.Errorf("failed to remove builder %q: %w", name, err)
 			}

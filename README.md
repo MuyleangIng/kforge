@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://go.dev)
-[![Release](https://img.shields.io/badge/release-v1.0.0-blue.svg)](https://github.com/MuyleangIng/kforge/releases/tag/v1.0.0)
+[![Release](https://img.shields.io/badge/release-v1.1.0-blue.svg)](https://github.com/MuyleangIng/kforge/releases/tag/v1.1.0)
 
 ---
 
@@ -25,6 +25,13 @@ It works both as a **standalone binary** and as a **Docker CLI plugin** (`docker
 - **Interactive setup wizard** — `kforge setup` guides QEMU or multi-node configuration
 - **5 progress styles** — spinner, bar, banner, dots, plain (pick at runtime)
 - **Declarative bake config** — define targets in `kforge.hcl` or `kforge.json`
+- **Project detection + Dockerfile generation** — detect Next.js, React, Vue, NestJS, Node, Spring Boot, FastAPI, Flask, Django, or plain HTML and generate a suitable Dockerfile
+- **Project overrides** — `.kforge.yml` can pin framework, runtime, image name, healthcheck, env defaults, and verify behavior
+- **Starter project generator** — `kforge init` can create a demo app or generate Docker assets from an existing project
+- **Build + run + check** — `kforge verify` builds locally, runs the container, waits for readiness, and checks HTTP endpoints
+- **CI/CD bootstrap** — `kforge ci init` generates GitHub Actions and GitLab CI pipelines for build, verify, push, and optional deploy stages
+- **Deploy bootstrap** — `kforge deploy init` generates `docker-compose.yml`, `render.yaml`, and `fly.toml` from detected project settings
+- **Environment diagnostics** — `kforge doctor` checks Docker, Buildx, contexts, and builders
 - **Flexible caching** — registry, local, S3, Azure, GitHub Actions
 - **Secrets** — inject files without baking them into layers
 - **Registry auth** — reads your `~/.docker/config.json` automatically
@@ -34,14 +41,14 @@ It works both as a **standalone binary** and as a **Docker CLI plugin** (`docker
 
 ## Install
 
-Download pre-built packages from the [v1.0.0 release page](https://github.com/MuyleangIng/kforge/releases/tag/v1.0.0).
-Verify downloads with [checksums.txt](https://github.com/MuyleangIng/kforge/releases/download/v1.0.0/checksums.txt).
+Download pre-built packages from the [v1.1.0 release page](https://github.com/MuyleangIng/kforge/releases/tag/v1.1.0).
+Verify downloads with [checksums.txt](https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/checksums.txt).
 
 ### macOS (Apple Silicon / arm64)
 
 **tar.gz (terminal):**
 ```bash
-curl -Lo kforge.tar.gz https://github.com/MuyleangIng/kforge/releases/download/v1.0.0/kforge_1.0.0_darwin_arm64.tar.gz
+curl -Lo kforge.tar.gz https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_darwin_arm64.tar.gz
 tar -xzf kforge.tar.gz
 sudo mv kforge /usr/local/bin/
 
@@ -51,7 +58,7 @@ kforge version
 
 **DMG installer (GUI):**
 ```bash
-curl -Lo kforge.dmg https://github.com/MuyleangIng/kforge/releases/download/v1.0.0/kforge_v1.0.0_darwin_arm64.dmg
+curl -Lo kforge.dmg https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_v1.1.0_darwin_arm64.dmg
 open kforge.dmg
 ```
 
@@ -59,7 +66,7 @@ open kforge.dmg
 
 **tar.gz (terminal):**
 ```bash
-curl -Lo kforge.tar.gz https://github.com/MuyleangIng/kforge/releases/download/v1.0.0/kforge_1.0.0_darwin_amd64.tar.gz
+curl -Lo kforge.tar.gz https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_darwin_amd64.tar.gz
 tar -xzf kforge.tar.gz
 sudo mv kforge /usr/local/bin/
 
@@ -69,7 +76,7 @@ kforge version
 
 **DMG installer (GUI):**
 ```bash
-curl -Lo kforge.dmg https://github.com/MuyleangIng/kforge/releases/download/v1.0.0/kforge_v1.0.0_darwin_amd64.dmg
+curl -Lo kforge.dmg https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_v1.1.0_darwin_amd64.dmg
 open kforge.dmg
 ```
 
@@ -77,7 +84,7 @@ open kforge.dmg
 
 **Debian / Ubuntu (.deb):**
 ```bash
-curl -Lo kforge.deb https://github.com/MuyleangIng/kforge/releases/download/v1.0.0/kforge_1.0.0_linux_amd64.deb
+curl -Lo kforge.deb https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_linux_amd64.deb
 sudo dpkg -i kforge.deb
 
 # Verify
@@ -86,7 +93,7 @@ kforge version
 
 **RHEL / Fedora / CentOS (.rpm):**
 ```bash
-curl -Lo kforge.rpm https://github.com/MuyleangIng/kforge/releases/download/v1.0.0/kforge_1.0.0_linux_amd64.rpm
+curl -Lo kforge.rpm https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_linux_amd64.rpm
 sudo rpm -i kforge.rpm
 
 # Verify
@@ -95,7 +102,7 @@ kforge version
 
 **tar.gz (any distro):**
 ```bash
-curl -Lo kforge.tar.gz https://github.com/MuyleangIng/kforge/releases/download/v1.0.0/kforge_1.0.0_linux_amd64.tar.gz
+curl -Lo kforge.tar.gz https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_linux_amd64.tar.gz
 tar -xzf kforge.tar.gz
 sudo mv kforge /usr/local/bin/
 
@@ -107,7 +114,7 @@ kforge version
 
 **Debian / Ubuntu (.deb):**
 ```bash
-curl -Lo kforge.deb https://github.com/MuyleangIng/kforge/releases/download/v1.0.0/kforge_1.0.0_linux_arm64.deb
+curl -Lo kforge.deb https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_linux_arm64.deb
 sudo dpkg -i kforge.deb
 
 # Verify
@@ -116,7 +123,7 @@ kforge version
 
 **RHEL / Fedora / CentOS (.rpm):**
 ```bash
-curl -Lo kforge.rpm https://github.com/MuyleangIng/kforge/releases/download/v1.0.0/kforge_1.0.0_linux_arm64.rpm
+curl -Lo kforge.rpm https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_linux_arm64.rpm
 sudo rpm -i kforge.rpm
 
 # Verify
@@ -125,7 +132,7 @@ kforge version
 
 **tar.gz (any distro):**
 ```bash
-curl -Lo kforge.tar.gz https://github.com/MuyleangIng/kforge/releases/download/v1.0.0/kforge_1.0.0_linux_arm64.tar.gz
+curl -Lo kforge.tar.gz https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_linux_arm64.tar.gz
 tar -xzf kforge.tar.gz
 sudo mv kforge /usr/local/bin/
 
@@ -137,7 +144,7 @@ kforge version
 
 ```powershell
 # Download zip
-curl -Lo kforge.zip https://github.com/MuyleangIng/kforge/releases/download/v1.0.0/kforge_1.0.0_windows_amd64.zip
+curl -Lo kforge.zip https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_windows_amd64.zip
 
 # Extract
 Expand-Archive kforge.zip -DestinationPath C:\tools\kforge
@@ -243,6 +250,109 @@ docker buildx create --append --name mybuild node-arm64
 
 ## Usage
 
+### Detect a project and generate Docker assets
+
+If a project does not have a `Dockerfile` yet, `kforge` can detect the app type and generate one for you.
+
+```bash
+# Inspect the current project
+kforge detect
+
+# Detect another directory
+kforge detect ./apps/web
+
+# Show the generated Dockerfile without writing files
+kforge detect --print-dockerfile
+
+# Generate Dockerfile + .dockerignore + kforge.hcl from an existing app
+kforge init --detect
+
+# Force a framework or Node version if detection needs help
+kforge init --detect --framework next --node 20
+kforge init --detect --framework fastapi --python 3.12
+kforge init --detect --framework spring --java 21
+kforge init --detect --framework flask --python 3.12
+kforge init --detect --framework django --python 3.12
+```
+
+Detection currently supports:
+
+- Next.js
+- React / Vite-style SPA
+- Vue
+- NestJS
+- Generic Node.js apps
+- Spring Boot
+- FastAPI
+- Flask
+- Django
+- Plain static HTML
+
+Runtime version selection is resolved from:
+
+- Node: `package.json` `engines.node`, then `.nvmrc`, then `.node-version`
+- Python: `pyproject.toml` `requires-python`, then `.python-version`, then `runtime.txt`
+- Java: Maven/Gradle project settings when present
+
+You can override the detected runtime with `--node`, `--python`, or `--java`.
+
+### Project overrides with `.kforge.yml`
+
+You can pin or adjust detection results in a `.kforge.yml` file at the project root.
+
+```yaml
+image: api-demo
+framework: flask
+python: "3.12"
+port: 8000
+healthcheck: /health
+app_module: app:app
+env:
+  APP_ENV: staging
+verify:
+  path: /health
+  timeout_seconds: 20
+deploy:
+  compose:
+    service: web
+  render:
+    name: api-demo
+    plan: starter
+    region: oregon
+  fly:
+    app: api-demo
+    primary_region: iad
+    memory_mb: 512
+ci:
+  main_branch: main
+  platforms:
+    - linux/amd64
+  deploy: render
+  deploy_path: /srv/api-demo
+  github:
+    workflow: kforge-ci.yml
+```
+
+Useful fields:
+
+- `framework`
+- `image`
+- `node`, `python`, `java`
+- `port`
+- `healthcheck`
+- `app_module`
+- `start_command`
+- `env`
+- `verify.path`, `verify.port`, `verify.timeout_seconds`, `verify.env`
+- `deploy.port`, `deploy.healthcheck`, `deploy.command`, `deploy.env`
+- `deploy.compose.service`
+- `deploy.render.name`, `deploy.render.plan`, `deploy.render.region`
+- `deploy.fly.app`, `deploy.fly.primary_region`, `deploy.fly.memory_mb`
+- `ci.image`, `ci.main_branch`, `ci.context`, `ci.platforms`
+- `ci.auto`, `ci.verify`, `ci.push`
+- `ci.deploy`, `ci.deploy_path`
+- `ci.github.workflow`, `ci.gitlab.file`
+
 ### Build
 
 ```bash
@@ -264,9 +374,23 @@ kforge build \
 # Build args + target stage
 kforge build --build-arg VERSION=1.2.3 --target release -t myapp:1.2.3 .
 
+# Build without a Dockerfile by auto-generating one in a temp file
+kforge build --auto -t myapp:dev .
+
+# Same, but force a project type or Node version
+kforge build --auto --framework next --node 20 -t myapp:dev .
+
+# Backend auto-detect
+kforge build --auto --framework fastapi --python 3.12 -t api:dev .
+kforge build --auto --framework spring --java 21 -t api:dev .
+kforge build --auto --framework flask --python 3.12 -t api:dev .
+kforge build --auto --framework django --python 3.12 -t api:dev .
+
 # Secrets
 kforge build --secret id=mysecret,src=./token.txt -t myapp .
 ```
+
+If no `Dockerfile` exists and `--auto` is not set, `kforge build` now stops with a helpful message telling you to run `kforge init --detect` or `kforge build --auto`.
 
 ### Bake (declarative builds)
 
@@ -294,7 +418,7 @@ group "default" {
 kforge bake                              # builds "default" group
 kforge bake app                          # builds specific target
 kforge bake --set app.platforms=linux/arm64
-TAG=1.0.0 kforge bake                    # pass variable via env
+TAG=1.1.0 kforge bake                    # pass variable via env
 kforge bake -f ci/kforge.hcl            # custom file
 ```
 
@@ -306,6 +430,85 @@ kforge builder create --name remote --driver remote --endpoint tcp://buildkitd:1
 kforge builder ls
 kforge builder use mybuilder
 kforge builder rm mybuilder
+```
+
+### Doctor
+
+```bash
+kforge doctor
+```
+
+### Verify
+
+```bash
+kforge verify
+kforge verify ./examples/fastapi-auto
+kforge verify --path /health --env APP_ENV=staging .
+kforge verify --keep-running ./examples/django-auto
+```
+
+`kforge verify` will:
+
+- build the image locally
+- run it on a random localhost port
+- wait for the detected or configured health path
+- print the HTTP response summary
+- stop the container unless `--keep-running` is set
+
+### CI/CD
+
+```bash
+kforge ci init
+kforge ci init --target github
+kforge ci init --target gitlab --deploy compose
+kforge ci init --print .
+```
+
+`kforge ci init` will:
+
+- detect the project and load `.kforge.yml` overrides
+- generate `.github/workflows/kforge-ci.yml` and/or `.gitlab-ci.yml`
+- create missing Docker assets first when the project does not have a `Dockerfile`
+- optionally add a deploy stage for `compose`, `render`, or `fly`
+- generate the matching deploy file if the selected CI deploy target needs one
+
+The generated pipelines are based on the current `kforge` commands:
+
+- `kforge detect`
+- `kforge verify`
+- `kforge build --push`
+- deploy hooks for `docker compose`, Render, or Fly.io
+
+### Deploy
+
+```bash
+kforge deploy init
+kforge deploy init ./examples/flask-auto
+kforge deploy init --target compose
+kforge deploy init --target render,fly ./examples/django-auto
+kforge deploy init --print .
+```
+
+`kforge deploy init` will:
+
+- detect the project and load `.kforge.yml` overrides
+- generate missing Docker assets when `Dockerfile` or `kforge.hcl` do not exist yet
+- write `docker-compose.yml`, `render.yaml`, and `fly.toml`
+- let you limit output with `--target compose`, `--target render`, or `--target fly`
+- print the files instead of writing them when `--print` is set
+
+### Init
+
+```bash
+kforge init --name myapp
+kforge init --dir ./demo --force
+kforge init --detect
+kforge init --detect --framework react --node 22
+kforge init --detect --framework fastapi --python 3.12
+kforge init --detect --framework spring --java 21
+kforge init --detect --framework flask --python 3.12
+kforge init --detect --framework django --python 3.12
+kforge init --detect --print-dockerfile
 ```
 
 ---
@@ -345,7 +548,15 @@ kforge/
 │   ├── build.go             # kforge build
 │   ├── bake.go              # kforge bake
 │   ├── builder.go           # kforge builder create/ls/use/rm
+│   ├── ci.go                # kforge ci init
+│   ├── detect.go            # kforge detect
+│   ├── deploy.go            # kforge deploy init
+│   ├── doctor.go            # kforge doctor
+│   ├── init.go              # kforge init
+│   ├── verify.go            # kforge verify
 │   └── version.go           # kforge version
+├── internal/project/        # project detection + generated Docker templates
+├── internal/meta/meta.go    # shared version/tool metadata
 ├── builder/builder.go       # builder config store (~/.kforge/)
 ├── bake/bake.go             # HCL + JSON config file parser
 └── util/progress/

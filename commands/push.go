@@ -18,15 +18,21 @@ import (
 //	kforge push IMAGE [PATH]
 func PushCmd() *cobra.Command {
 	var (
-		platforms   []string
-		extraTags   []string
-		buildArgs   []string
-		dockerfile  string
-		target      string
-		noCache     bool
-		cacheRef    string
-		progress    string
-		builderName string
+		platforms     []string
+		extraTags     []string
+		buildArgs     []string
+		dockerfile    string
+		target        string
+		noCache       bool
+		cacheRef      string
+		progress      string
+		builderName   string
+		dryRun        bool
+		auto          bool
+		autoFramework string
+		autoNode      string
+		autoPython    string
+		autoJava      string
 	)
 
 	cmd := &cobra.Command{
@@ -59,7 +65,7 @@ Registry support:
 				path = args[1]
 			}
 			return runPush(cmd.Context(), image, path, platforms, extraTags,
-				buildArgs, dockerfile, target, cacheRef, noCache, progress, builderName)
+				buildArgs, dockerfile, target, cacheRef, noCache, progress, builderName, dryRun, auto, autoFramework, autoNode, autoPython, autoJava)
 		},
 	}
 
@@ -76,6 +82,12 @@ Registry support:
 	flags.StringVar(&progress, "progress", "auto",
 		"Progress style: auto|spinner|bar|banner|dots|plain")
 	flags.StringVar(&builderName, "builder", "", "Builder instance to use")
+	flags.BoolVar(&dryRun, "dry-run", false, "Print the docker buildx command and exit")
+	flags.BoolVar(&auto, "auto", false, "Generate a temporary Dockerfile when none exists")
+	flags.StringVar(&autoFramework, "framework", "", "Force project type for --auto: next|react|vue|nest|html|node|spring|fastapi|django|flask")
+	flags.StringVar(&autoNode, "node", "", "Override detected Node.js major version for --auto")
+	flags.StringVar(&autoPython, "python", "", "Override detected Python version for FastAPI, Django, or Flask --auto pushes")
+	flags.StringVar(&autoJava, "java", "", "Override detected Java version for Spring --auto pushes")
 
 	return cmd
 }
@@ -84,7 +96,7 @@ func runPush(ctx context.Context,
 	image, path string,
 	platforms, extraTags, buildArgs []string,
 	dockerfile, target, cacheRef string,
-	noCache bool, progress, builderName string) error {
+	noCache bool, progress, builderName string, dryRun, auto bool, autoFramework, autoNode, autoPython, autoJava string) error {
 
 	// Build the full tag list
 	tags := []string{image}
@@ -103,18 +115,24 @@ func runPush(ctx context.Context,
 	}
 
 	opts := &buildOptions{
-		contextPath: path,
-		dockerfile:  dockerfile,
-		tags:        tags,
-		platforms:   platforms,
-		buildArgs:   buildArgs,
-		target:      target,
-		cacheFrom:   cacheFrom,
-		cacheTo:     cacheTo,
-		push:        true,
-		noCache:     noCache,
-		progress:    progress,
-		builderName: builderName,
+		contextPath:   path,
+		dockerfile:    dockerfile,
+		tags:          tags,
+		platforms:     platforms,
+		buildArgs:     buildArgs,
+		target:        target,
+		cacheFrom:     cacheFrom,
+		cacheTo:       cacheTo,
+		push:          true,
+		noCache:       noCache,
+		progress:      progress,
+		builderName:   builderName,
+		dryRun:        dryRun,
+		auto:          auto,
+		autoFramework: autoFramework,
+		autoNode:      autoNode,
+		autoPython:    autoPython,
+		autoJava:      autoJava,
 	}
 
 	return runBuild(ctx, opts)
@@ -140,7 +158,8 @@ func autoTag(image string) string {
 
 // cacheImageRef derives the cache image ref from the main image.
 // e.g. "muyleangin/app:v1.2" → "muyleangin/app:buildcache"
-//      "ghcr.io/user/app:latest" → "ghcr.io/user/app:buildcache"
+//
+//	"ghcr.io/user/app:latest" → "ghcr.io/user/app:buildcache"
 func cacheImageRef(image string) string {
 	// Strip tag/digest
 	base := image

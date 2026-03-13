@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MuyleangIng/kforge/internal/meta"
 	"github.com/spf13/cobra"
 )
 
@@ -100,7 +101,7 @@ func printLoginHeader(registry, label string) {
 	bot := cCyan + "╚" + strings.Repeat("═", bannerWidth) + "╝" + cReset
 
 	title := cBold + cWhite + "KFORGE LOGIN" + cReset +
-		"  " + cDim + "v0.1.0 · KhmerStack" + cReset
+		"  " + cDim + meta.DisplayVersion() + " · KhmerStack" + cReset
 
 	fmt.Println()
 	fmt.Println(top)

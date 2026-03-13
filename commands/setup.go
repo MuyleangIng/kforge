@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/MuyleangIng/kforge/builder"
+	"github.com/MuyleangIng/kforge/internal/meta"
 	"github.com/spf13/cobra"
 )
 
@@ -125,8 +127,8 @@ func setupQEMU() error {
 	}
 
 	// Register in kforge store too
-	_ = runSilent("kforge", "builder", "create", "--name", builderName, "--driver", "docker-container")
-	_ = runSilent("kforge", "builder", "use", builderName)
+	_ = builder.Save(builder.Config{Name: builderName, Driver: "docker-container"})
+	_ = builder.SetCurrent(builderName)
 
 	fmt.Println(sGreen + "✓ Builder created" + sReset)
 	printVerify(builderName)
@@ -216,8 +218,8 @@ func setupMultiNode() error {
 	}
 
 	// Register in kforge store
-	_ = runSilent("kforge", "builder", "create", "--name", builderName, "--driver", "docker-container")
-	_ = runSilent("kforge", "builder", "use", builderName)
+	_ = builder.Save(builder.Config{Name: builderName, Driver: "docker-container"})
+	_ = builder.SetCurrent(builderName)
 
 	printVerify(builderName)
 	return nil
@@ -244,7 +246,7 @@ func printBanner() {
 	for _, l := range lines {
 		fmt.Println(sCyan + l + sReset)
 	}
-	fmt.Println(sDim + "  v0.1.0 · KhmerStack · Ing Muyleang" + sReset)
+	fmt.Println(sDim + "  " + meta.DisplayVersion() + " · KhmerStack · Ing Muyleang" + sReset)
 	fmt.Println()
 }
 

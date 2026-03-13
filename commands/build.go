@@ -1,17 +1,16 @@
 package commands
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/MuyleangIng/kforge/builder"
+	"github.com/MuyleangIng/kforge/internal/meta"
+	"github.com/MuyleangIng/kforge/internal/project"
 	"github.com/spf13/cobra"
 )
 
@@ -31,20 +30,26 @@ const (
 
 // buildOptions holds all CLI flag values for the build command.
 type buildOptions struct {
-	contextPath string
-	dockerfile  string
-	tags        []string
-	platforms   []string
-	buildArgs   []string
-	target      string
-	cacheFrom   []string
-	cacheTo     []string
-	secrets     []string
-	push        bool
-	load        bool
-	noCache     bool
-	progress    string
-	builderName string
+	contextPath   string
+	dockerfile    string
+	tags          []string
+	platforms     []string
+	buildArgs     []string
+	target        string
+	cacheFrom     []string
+	cacheTo       []string
+	secrets       []string
+	push          bool
+	load          bool
+	noCache       bool
+	progress      string
+	builderName   string
+	dryRun        bool
+	auto          bool
+	autoFramework string
+	autoNode      string
+	autoPython    string
+	autoJava      string
 }
 
 // BuildCmd returns the `kforge build` command.
@@ -87,6 +92,12 @@ For a shorter command use:  kforge push IMAGE [PATH]`,
 	flags.StringVar(&opts.progress, "progress", "auto",
 		"Progress style: auto|spinner|bar|banner|dots|plain")
 	flags.StringVar(&opts.builderName, "builder", "", "Builder to use")
+	flags.BoolVar(&opts.dryRun, "dry-run", false, "Print the docker buildx command and exit")
+	flags.BoolVar(&opts.auto, "auto", false, "Generate a temporary Dockerfile when none exists")
+	flags.StringVar(&opts.autoFramework, "framework", "", "Force project type for --auto: next|react|vue|nest|html|node|spring|fastapi|django|flask")
+	flags.StringVar(&opts.autoNode, "node", "", "Override detected Node.js major version for --auto")
+	flags.StringVar(&opts.autoPython, "python", "", "Override detected Python version for FastAPI, Django, or Flask --auto builds")
+	flags.StringVar(&opts.autoJava, "java", "", "Override detected Java version for Spring --auto builds")
 
 	return cmd
 }
@@ -101,19 +112,41 @@ func runBuild(ctx context.Context, opts *buildOptions) error {
 		}
 	}
 
-	printBuildHeader(opts, bxBuilder)
-	start := time.Now()
+	detection, cleanup, err := ensureDockerfileForBuild(opts)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if err != nil {
+		return err
+	}
 
 	args := toBuildxArgs(opts, bxBuilder)
+	style := resolveProgressStyle(opts.progress, os.Stderr)
+
+	printBuildHeader(opts, bxBuilder, style)
+	if detection != nil {
+		fmt.Printf("  %sAuto-detected %s project%s  %s%s%s  %s%s%s\n\n",
+			cCyan, detection.DisplayFramework(), cReset,
+			cBold, detection.SuggestedImageName(), cReset,
+			cDim, autoDetectionSuffix(*detection), cReset)
+	}
+	if opts.dryRun {
+		fmt.Printf("  %s$ docker %s%s\n\n", cCyan, shellJoin(args), cReset)
+		return nil
+	}
+
+	start := time.Now()
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Stdin = os.Stdin
 
-	// Use our colorized writer for stderr (buildx sends progress to stderr)
-	lw := &buildLineWriter{out: os.Stderr}
-	cmd.Stderr = lw
+	renderer := newProgressRenderer(style, os.Stderr)
+	defer func() {
+		_ = renderer.Close()
+	}()
+	cmd.Stderr = renderer
 	cmd.Stdout = os.Stdout
 
-	err := cmd.Run()
+	err = cmd.Run()
 	elapsed := time.Since(start).Round(time.Millisecond)
 
 	if err != nil {
@@ -172,95 +205,6 @@ func toBuildxArgs(opts *buildOptions, builderName string) []string {
 	return args
 }
 
-func toBuildxProgress(style string) string {
-	switch style {
-	case "plain":
-		return "plain"
-	case "auto", "":
-		return "plain" // we colorize plain output ourselves
-	default:
-		return "plain"
-	}
-}
-
-// ── Live colorized output ─────────────────────────────────────────────────────
-
-// reStepLine matches buildx plain output lines like "#3 [2/5] COPY . ."
-var reStepLine = regexp.MustCompile(`^#(\d+)\s+(.+)$`)
-
-// buildLineWriter intercepts buildx plain output and renders it with colors.
-type buildLineWriter struct {
-	out     io.Writer
-	partial []byte
-}
-
-func (w *buildLineWriter) Write(p []byte) (n int, err error) {
-	w.partial = append(w.partial, p...)
-	for {
-		idx := bytes.IndexByte(w.partial, '\n')
-		if idx < 0 {
-			break
-		}
-		line := string(w.partial[:idx])
-		w.partial = w.partial[idx+1:]
-		w.renderLine(strings.TrimRight(line, "\r"))
-	}
-	return len(p), nil
-}
-
-func (w *buildLineWriter) renderLine(line string) {
-	if line == "" {
-		return
-	}
-
-	m := reStepLine.FindStringSubmatch(line)
-	if m == nil {
-		// Non-step lines: auth tokens, general output
-		if strings.HasPrefix(line, "View build details:") {
-			fmt.Fprintf(w.out, "  %s%s%s\n", cDim, line, cReset)
-		} else if strings.HasPrefix(line, " =>") || strings.HasPrefix(line, "=>") {
-			fmt.Fprintf(w.out, "  %s%s%s\n", cGray, line, cReset)
-		} else {
-			fmt.Fprintf(w.out, "  %s%s%s\n", cGray, line, cReset)
-		}
-		return
-	}
-
-	content := strings.TrimSpace(m[2])
-
-	switch {
-	case strings.HasSuffix(content, "CACHED"):
-		// ⚡ cached step — yellow
-		name := strings.TrimSuffix(strings.TrimSpace(strings.TrimSuffix(content, "CACHED")), " ")
-		fmt.Fprintf(w.out, "  %s⚡%s %s%-52s%s %scached%s\n",
-			cYellow, cReset, cDim, shortStep(name), cReset, cYellow, cReset)
-
-	case strings.Contains(content, "DONE ") || strings.HasSuffix(content, "done"):
-		// ✓ completed step — green
-		parts := strings.LastIndex(content, "DONE ")
-		if parts > 0 {
-			name := strings.TrimSpace(content[:parts])
-			dur := strings.TrimSpace(content[parts+5:])
-			fmt.Fprintf(w.out, "  %s✓%s  %s%-52s%s %s%s%s\n",
-				cGreen, cReset, cBold, shortStep(name), cReset, cDim, dur, cReset)
-		} else {
-			fmt.Fprintf(w.out, "  %s✓%s  %s%s%s\n", cGreen, cReset, cDim, shortStep(content), cReset)
-		}
-
-	case strings.Contains(content, "ERROR"):
-		// ✗ error — red
-		fmt.Fprintf(w.out, "  %s✗%s  %s%s%s\n", cRed, cReset, cRed, content, cReset)
-
-	case strings.HasPrefix(content, "[auth]"):
-		// auth token exchange — subtle
-		fmt.Fprintf(w.out, "  %s🔐 %s%s\n", cDim, content[6:], cReset)
-
-	default:
-		// In-progress or info step — cyan arrow
-		fmt.Fprintf(w.out, "  %s→%s  %s%s%s\n", cCyan, cReset, cGray, shortStep(content), cReset)
-	}
-}
-
 // shortStep trims internal prefixes and long strings for display.
 func shortStep(s string) string {
 	s = strings.TrimPrefix(s, "[internal] ")
@@ -284,12 +228,12 @@ func boxLine(content string) string {
 	return cCyan + "║ " + cReset + content + strings.Repeat(" ", pad) + cCyan + " ║" + cReset
 }
 
-func printBuildHeader(opts *buildOptions, builderName string) {
+func printBuildHeader(opts *buildOptions, builderName, style string) {
 	top := cCyan + "╔" + strings.Repeat("═", bannerWidth) + "╗" + cReset
 	bot := cCyan + "╚" + strings.Repeat("═", bannerWidth) + "╝" + cReset
 
 	title := cBold + cWhite + "KFORGE BUILD" + cReset +
-		"  " + cDim + "v0.1.0 · KhmerStack" + cReset
+		"  " + cDim + meta.DisplayVersion() + " · KhmerStack" + cReset
 
 	plats := strings.Join(opts.platforms, " · ")
 	if plats == "" {
@@ -311,6 +255,7 @@ func printBuildHeader(opts *buildOptions, builderName string) {
 	fmt.Println(cCyan + "║" + strings.Repeat("─", bannerWidth) + "║" + cReset)
 	fmt.Println(boxLine(cDim + "  Platform  " + cReset + cCyan + plats + cReset))
 	fmt.Println(boxLine(cDim + "  Tag       " + cReset + cBold + tags + cReset))
+	fmt.Println(boxLine(cDim + "  Progress  " + cReset + strings.ToUpper(style)))
 	if reg != "" {
 		fmt.Println(boxLine(cDim + "  Registry  " + cReset + reg))
 	}
@@ -343,21 +288,35 @@ func printBuildFooter(elapsed time.Duration, tags []string) {
 // detectRegistry returns a human-readable registry label from an image name.
 func detectRegistry(image string) string {
 	img := strings.ToLower(image)
+	host, hasHost := registryHost(img)
 	switch {
 	case strings.HasPrefix(img, "ghcr.io/"):
 		return cBlue + "GitHub Container Registry (ghcr.io)" + cReset
 	case strings.Contains(img, ".dkr.ecr.") && strings.Contains(img, ".amazonaws.com"):
 		return cYellow + "AWS Elastic Container Registry (ECR)" + cReset
-	case strings.HasSuffix(strings.Split(img, "/")[0], ".azurecr.io"):
+	case hasHost && strings.HasSuffix(host, ".azurecr.io"):
 		return cBlue + "Azure Container Registry" + cReset
 	case strings.HasPrefix(img, "gcr.io/") || strings.Contains(img, ".pkg.dev/"):
 		return cBlue + "Google Container Registry" + cReset
-	case strings.HasPrefix(img, "docker.io/") || !strings.Contains(strings.Split(img, "/")[0], "."):
+	case !hasHost || host == "docker.io":
 		return cBlue + "Docker Hub" + cReset
+	case host == "localhost" || strings.HasPrefix(host, "localhost:"):
+		return cBlue + "Local registry (" + host + ")" + cReset
 	default:
-		host := strings.Split(img, "/")[0]
 		return cGray + "Custom registry (" + host + ")" + cReset
 	}
+}
+
+func registryHost(image string) (string, bool) {
+	first, rest, found := strings.Cut(image, "/")
+	if !found {
+		return "", false
+	}
+	if first == "localhost" || strings.Contains(first, ".") || strings.Contains(first, ":") {
+		return first, true
+	}
+	_ = rest
+	return "", false
 }
 
 // stripANSI removes ANSI escape codes for length calculation.
@@ -392,4 +351,45 @@ func parseCSV(s string) map[string]string {
 		}
 	}
 	return result
+}
+
+func shellJoin(args []string) string {
+	parts := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg == "" {
+			parts = append(parts, `""`)
+			continue
+		}
+		if strings.ContainsAny(arg, " \t\n\"'") {
+			parts = append(parts, strconvQuote(arg))
+			continue
+		}
+		parts = append(parts, arg)
+	}
+	return strings.Join(parts, " ")
+}
+
+func strconvQuote(s string) string {
+	replacer := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
+	return `"` + replacer.Replace(s) + `"`
+}
+
+func autoDetectionSuffix(detection project.Detection) string {
+	parts := []string{}
+	if toolchain := detection.ToolchainDisplay(); toolchain != "" {
+		parts = append(parts, toolchain)
+	}
+	if detection.NodeVersion != "" {
+		parts = append(parts, "node "+detection.NodeVersion)
+	}
+	if detection.JavaVersion != "" {
+		parts = append(parts, "java "+detection.JavaVersion)
+	}
+	if detection.PythonVersion != "" {
+		parts = append(parts, "python "+detection.PythonVersion)
+	}
+	if detection.HealthcheckPath != "" {
+		parts = append(parts, "health "+detection.HealthcheckPath)
+	}
+	return strings.Join(parts, " · ")
 }

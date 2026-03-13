@@ -7,16 +7,9 @@ import (
 	"strings"
 
 	"github.com/MuyleangIng/kforge/commands"
+	"github.com/MuyleangIng/kforge/internal/meta"
 	"github.com/spf13/cobra"
 )
-
-const (
-	toolName = "kforge"
-	vendor   = "KhmerStack / Ing Muyleang"
-)
-
-// version is set at build time via -ldflags "-X main.version=vX.Y.Z"
-var version = "dev"
 
 // pluginMetadata is returned when Docker discovers this CLI plugin.
 type pluginMetadata struct {
@@ -34,14 +27,14 @@ func main() {
 	//   docker-kforge docker-cli-plugin-metadata
 	// We respond with JSON metadata.
 	if len(os.Args) > 1 && os.Args[1] == "docker-cli-plugin-metadata" {
-		meta := pluginMetadata{
+		pluginMeta := pluginMetadata{
 			SchemaVersion:    "0.1.0",
-			Vendor:           vendor,
-			Version:          version,
+			Vendor:           meta.Vendor,
+			Version:          meta.DisplayVersion(),
 			ShortDescription: "Personal multi-platform image builder powered by BuildKit",
-			URL:              "https://github.com/MuyleangIng/kforge",
+			URL:              meta.URL,
 		}
-		if err := json.NewEncoder(os.Stdout).Encode(meta); err != nil {
+		if err := json.NewEncoder(os.Stdout).Encode(pluginMeta); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -56,7 +49,7 @@ func main() {
 	os.Args = stripDockerPluginArgs(os.Args)
 
 	root := &cobra.Command{
-		Use:   toolName,
+		Use:   meta.ToolName,
 		Short: "kforge — personal multi-platform image builder",
 		Long: `kforge — Personal multi-platform image builder · KhmerStack · Ing Muyleang
 
@@ -73,9 +66,32 @@ func main() {
        kforge login ghcr.io
        kforge login myregistry.io
 
+  ★  Environment checks:
+       kforge doctor
+
+  ★  Starter project:
+       kforge init --name myapp
+       kforge init --detect
+
+  ★  Detect existing apps:
+       kforge detect
+       kforge build --auto .
+
+  ★  Build + run + check:
+       kforge verify
+       kforge verify --path /health
+
+  ★  CI/CD bootstrap:
+       kforge ci init
+       kforge ci init --target github
+
+  ★  Deploy bootstrap:
+       kforge deploy init
+       kforge deploy init --target compose
+
   ★  First time setup:
        kforge setup`,
-		Version:       version,
+		Version:       meta.DisplayVersion(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -86,6 +102,12 @@ func main() {
 		commands.BakeCmd(),
 		commands.LoginCmd(),
 		commands.BuilderCmd(),
+		commands.DoctorCmd(),
+		commands.DetectCmd(),
+		commands.CICmd(),
+		commands.DeployCmd(),
+		commands.InitCmd(),
+		commands.VerifyCmd(),
 		commands.SetupCmd(),
 		commands.VersionCmd(),
 	)
@@ -107,10 +129,10 @@ func stripDockerPluginArgs(args []string) []string {
 		"--context": true, "-c": true,
 		"--host": true, "-H": true,
 		"--log-level": true, "-l": true,
-		"--config": true,
+		"--config":    true,
 		"--tlscacert": true,
-		"--tlscert": true,
-		"--tlskey": true,
+		"--tlscert":   true,
+		"--tlskey":    true,
 	}
 	// Docker global boolean flags
 	dockerBoolFlags := map[string]bool{
@@ -143,7 +165,7 @@ func stripDockerPluginArgs(args []string) []string {
 		}
 
 		// Strip the plugin-name arg ("kforge") — only the first occurrence
-		if !pluginNameStripped && arg == toolName {
+		if !pluginNameStripped && arg == meta.ToolName {
 			pluginNameStripped = true
 			i++
 			continue

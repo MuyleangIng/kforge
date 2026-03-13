@@ -121,7 +121,37 @@ func parseHCL(path string) (*File, error) {
 			vars[parts[0]] = cty.StringVal(parts[1])
 		}
 	}
-	evalCtx := &hcl.EvalContext{Variables: map[string]cty.Value{"env": cty.ObjectVal(vars)}}
+
+	evalVars := map[string]cty.Value{
+		"env": cty.ObjectVal(vars),
+	}
+
+	body, ok := hclFile.Body.(*hclsyntax.Body)
+	if ok {
+		envCtx := &hcl.EvalContext{Variables: map[string]cty.Value{"env": cty.ObjectVal(vars)}}
+		for _, block := range body.Blocks {
+			if block.Type != "variable" || len(block.Labels) == 0 {
+				continue
+			}
+
+			name := block.Labels[0]
+			if attr, ok := block.Body.Attributes["default"]; ok {
+				val, diags := attr.Expr.Value(envCtx)
+				if diags.HasErrors() {
+					return nil, fmt.Errorf("HCL variable default error in %s for %q: %s", path, name, diags.Error())
+				}
+				if val.Type() == cty.String {
+					evalVars[name] = val
+				}
+			}
+
+			if envVal, exists := os.LookupEnv(name); exists {
+				evalVars[name] = cty.StringVal(envVal)
+			}
+		}
+	}
+
+	evalCtx := &hcl.EvalContext{Variables: evalVars}
 
 	var f File
 	if diags := gohcl.DecodeBody(hclFile.Body, evalCtx, &f); diags.HasErrors() {

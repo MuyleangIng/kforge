@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/spf13/cobra"
 	"github.com/MuyleangIng/kforge/bake"
+	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -20,6 +20,7 @@ func BakeCmd() *cobra.Command {
 		load        bool
 		noCache     bool
 		progress    string
+		dryRun      bool
 	)
 
 	cmd := &cobra.Command{
@@ -42,7 +43,7 @@ If no "default" group exists, all targets are built.`,
   kforge bake -f ci/kforge.hcl`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			targets = args
-			return runBake(cmd.Context(), file, set, targets, builderName, push, load, noCache, progress)
+			return runBake(cmd.Context(), file, set, targets, builderName, push, load, noCache, progress, dryRun)
 		},
 	}
 
@@ -53,13 +54,14 @@ If no "default" group exists, all targets are built.`,
 	flags.BoolVar(&push, "push", false, "Push all images to registry (overrides per-target setting)")
 	flags.BoolVar(&load, "load", false, "Load all images into local Docker")
 	flags.BoolVar(&noCache, "no-cache", false, "Do not use cache")
-	flags.StringVar(&progress, "progress", "auto", "Progress output: auto, plain, tty")
+	flags.StringVar(&progress, "progress", "auto", "Progress style: auto|spinner|bar|banner|dots|plain")
+	flags.BoolVar(&dryRun, "dry-run", false, "Print the docker buildx commands and exit")
 
 	return cmd
 }
 
 func runBake(ctx context.Context, file string, set, targetNames []string,
-	builderName string, push, load, noCache bool, progress string) error {
+	builderName string, push, load, noCache bool, progress string, dryRun bool) error {
 
 	// 1. Load config file
 	f, err := bake.Load(file)
@@ -90,7 +92,7 @@ func runBake(ctx context.Context, file string, set, targetNames []string,
 	for _, t := range targets {
 		t := t // capture loop variable
 		eg.Go(func() error {
-			return buildTarget(ctx, t, builderName, push, load, noCache, progress)
+			return buildTarget(ctx, t, builderName, push, load, noCache, progress, dryRun)
 		})
 	}
 	return eg.Wait()
@@ -98,7 +100,7 @@ func runBake(ctx context.Context, file string, set, targetNames []string,
 
 // buildTarget converts a bake target into build options and runs the build.
 func buildTarget(ctx context.Context, t bake.Target, builderName string,
-	globalPush, globalLoad, globalNoCache bool, progress string) error {
+	globalPush, globalLoad, globalNoCache bool, progress string, dryRun bool) error {
 
 	fmt.Printf("[%s] starting build\n", t.Name)
 
@@ -117,6 +119,7 @@ func buildTarget(ctx context.Context, t bake.Target, builderName string,
 		noCache:     t.NoCache || globalNoCache,
 		progress:    progress,
 		builderName: builderName,
+		dryRun:      dryRun,
 	}
 
 	if opts.contextPath == "" {

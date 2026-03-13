@@ -10,6 +10,7 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/zclconf/go-cty v1.13.2
 	golang.org/x/sync v0.3.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

@@ -52,7 +52,7 @@ jobs:
         run: |
           VERSION=${GITHUB_REF_NAME}
           go build \
-            -ldflags="-s -w -X main.version=${VERSION} -X github.com/MuyleangIng/kforge/commands.Version=${VERSION}" \
+            -ldflags="-s -w -X github.com/MuyleangIng/kforge/internal/meta.Version=${VERSION}" \
             -o kforge ./cmd/
 
       - name: Create DMG
