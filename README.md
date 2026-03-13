@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://go.dev)
-[![Release](https://img.shields.io/badge/release-v1.1.0-blue.svg)](https://github.com/MuyleangIng/kforge/releases/tag/v1.1.0)
+[![Release](https://img.shields.io/badge/release-v1.1.1-blue.svg)](https://github.com/MuyleangIng/kforge/releases/tag/v1.1.1)
 
 ---
 
@@ -41,14 +41,14 @@ It works both as a **standalone binary** and as a **Docker CLI plugin** (`docker
 
 ## Install
 
-Download pre-built packages from the [v1.1.0 release page](https://github.com/MuyleangIng/kforge/releases/tag/v1.1.0).
-Verify downloads with [checksums.txt](https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/checksums.txt).
+Download pre-built packages from the [v1.1.1 release page](https://github.com/MuyleangIng/kforge/releases/tag/v1.1.1).
+Verify downloads with [checksums.txt](https://github.com/MuyleangIng/kforge/releases/download/v1.1.1/checksums.txt).
 
 ### macOS (Apple Silicon / arm64)
 
 **tar.gz (terminal):**
 ```bash
-curl -Lo kforge.tar.gz https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_darwin_arm64.tar.gz
+curl -Lo kforge.tar.gz https://github.com/MuyleangIng/kforge/releases/download/v1.1.1/kforge_1.1.1_darwin_arm64.tar.gz
 tar -xzf kforge.tar.gz
 sudo mv kforge /usr/local/bin/
 
@@ -58,7 +58,7 @@ kforge version
 
 **DMG installer (GUI):**
 ```bash
-curl -Lo kforge.dmg https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_v1.1.0_darwin_arm64.dmg
+curl -Lo kforge.dmg https://github.com/MuyleangIng/kforge/releases/download/v1.1.1/kforge_v1.1.1_darwin_arm64.dmg
 open kforge.dmg
 ```
 
@@ -66,7 +66,7 @@ open kforge.dmg
 
 **tar.gz (terminal):**
 ```bash
-curl -Lo kforge.tar.gz https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_darwin_amd64.tar.gz
+curl -Lo kforge.tar.gz https://github.com/MuyleangIng/kforge/releases/download/v1.1.1/kforge_1.1.1_darwin_amd64.tar.gz
 tar -xzf kforge.tar.gz
 sudo mv kforge /usr/local/bin/
 
@@ -76,7 +76,7 @@ kforge version
 
 **DMG installer (GUI):**
 ```bash
-curl -Lo kforge.dmg https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_v1.1.0_darwin_amd64.dmg
+curl -Lo kforge.dmg https://github.com/MuyleangIng/kforge/releases/download/v1.1.1/kforge_v1.1.1_darwin_amd64.dmg
 open kforge.dmg
 ```
 
@@ -84,7 +84,7 @@ open kforge.dmg
 
 **Debian / Ubuntu (.deb):**
 ```bash
-curl -Lo kforge.deb https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_linux_amd64.deb
+curl -Lo kforge.deb https://github.com/MuyleangIng/kforge/releases/download/v1.1.1/kforge_1.1.1_linux_amd64.deb
 sudo dpkg -i kforge.deb
 
 # Verify
@@ -93,7 +93,7 @@ kforge version
 
 **RHEL / Fedora / CentOS (.rpm):**
 ```bash
-curl -Lo kforge.rpm https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_linux_amd64.rpm
+curl -Lo kforge.rpm https://github.com/MuyleangIng/kforge/releases/download/v1.1.1/kforge_1.1.1_linux_amd64.rpm
 sudo rpm -i kforge.rpm
 
 # Verify
@@ -102,7 +102,7 @@ kforge version
 
 **tar.gz (any distro):**
 ```bash
-curl -Lo kforge.tar.gz https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_linux_amd64.tar.gz
+curl -Lo kforge.tar.gz https://github.com/MuyleangIng/kforge/releases/download/v1.1.1/kforge_1.1.1_linux_amd64.tar.gz
 tar -xzf kforge.tar.gz
 sudo mv kforge /usr/local/bin/
 
@@ -114,7 +114,7 @@ kforge version
 
 **Debian / Ubuntu (.deb):**
 ```bash
-curl -Lo kforge.deb https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_linux_arm64.deb
+curl -Lo kforge.deb https://github.com/MuyleangIng/kforge/releases/download/v1.1.1/kforge_1.1.1_linux_arm64.deb
 sudo dpkg -i kforge.deb
 
 # Verify
@@ -123,7 +123,7 @@ kforge version
 
 **RHEL / Fedora / CentOS (.rpm):**
 ```bash
-curl -Lo kforge.rpm https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_linux_arm64.rpm
+curl -Lo kforge.rpm https://github.com/MuyleangIng/kforge/releases/download/v1.1.1/kforge_1.1.1_linux_arm64.rpm
 sudo rpm -i kforge.rpm
 
 # Verify
@@ -132,7 +132,7 @@ kforge version
 
 **tar.gz (any distro):**
 ```bash
-curl -Lo kforge.tar.gz https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_linux_arm64.tar.gz
+curl -Lo kforge.tar.gz https://github.com/MuyleangIng/kforge/releases/download/v1.1.1/kforge_1.1.1_linux_arm64.tar.gz
 tar -xzf kforge.tar.gz
 sudo mv kforge /usr/local/bin/
 
@@ -144,7 +144,7 @@ kforge version
 
 ```powershell
 # Download zip
-curl -Lo kforge.zip https://github.com/MuyleangIng/kforge/releases/download/v1.1.0/kforge_1.1.0_windows_amd64.zip
+curl -Lo kforge.zip https://github.com/MuyleangIng/kforge/releases/download/v1.1.1/kforge_1.1.1_windows_amd64.zip
 
 # Extract
 Expand-Archive kforge.zip -DestinationPath C:\tools\kforge
@@ -418,7 +418,7 @@ group "default" {
 kforge bake                              # builds "default" group
 kforge bake app                          # builds specific target
 kforge bake --set app.platforms=linux/arm64
-TAG=1.1.0 kforge bake                    # pass variable via env
+TAG=1.1.1 kforge bake                    # pass variable via env
 kforge bake -f ci/kforge.hcl            # custom file
 ```
 

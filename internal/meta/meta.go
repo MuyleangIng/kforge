@@ -4,7 +4,7 @@ const (
 	ToolName              = "kforge"
 	Vendor                = "KhmerStack / Ing Muyleang"
 	URL                   = "https://github.com/MuyleangIng/kforge"
-	DefaultReleaseVersion = "v1.1.0"
+	DefaultReleaseVersion = "v1.1.1"
 )
 
 // Version is overridden at build time via:

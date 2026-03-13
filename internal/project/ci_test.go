@@ -31,9 +31,11 @@ func TestGenerateGitHubActionsWorkflow(t *testing.T) {
 	for _, want := range []string{
 		"name: kforge-ci",
 		"workflow_dispatch:",
-		`KFORGE_IMAGE: "ghcr.io/${{ github.repository_owner }}/fastapi-demo"`,
+		`KFORGE_IMAGE: ""`,
+		`KFORGE_IMAGE_NAME: "fastapi-demo"`,
 		`KFORGE_PLATFORMS: "linux/amd64,linux/arm64"`,
 		"uses: docker/setup-buildx-action@v3",
+		`OWNER_LOWER="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"`,
 		`run: kforge detect "$KFORGE_CONTEXT"`,
 		`kforge verify --progress plain "$KFORGE_CONTEXT"`,
 		`uses: docker/login-action@v3`,

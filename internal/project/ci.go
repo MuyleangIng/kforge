@@ -1,7 +1,6 @@
 package project
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/MuyleangIng/kforge/internal/meta"
@@ -9,6 +8,7 @@ import (
 
 type CISpec struct {
 	Name               string
+	ImageName          string
 	Context            string
 	Image              string
 	Registry           string
@@ -28,6 +28,7 @@ type CISpec struct {
 func ResolveCISpec(d Detection, cfg Config, provider string) CISpec {
 	spec := CISpec{
 		Name:               d.SuggestedImageName(),
+		ImageName:          d.SuggestedImageName(),
 		Context:            ".",
 		MainBranch:         "main",
 		Platforms:          []string{"linux/amd64"},
@@ -89,7 +90,7 @@ func ResolveCISpec(d Detection, cfg Config, provider string) CISpec {
 			spec.Image = cfg.CI.Image
 			spec.Registry = registryHost(cfg.CI.Image)
 		} else {
-			spec.Image = fmt.Sprintf("ghcr.io/${{ github.repository_owner }}/%s", d.SuggestedImageName())
+			spec.Image = ""
 			spec.Registry = "ghcr.io"
 		}
 	}
@@ -119,6 +120,7 @@ func GenerateGitHubActionsWorkflow(d Detection, cfg Config) string {
 		"KFORGE_DEPLOY_PATH":   spec.DeployPath,
 		"KFORGE_DEPLOY_TARGET": spec.DeployTarget,
 		"KFORGE_IMAGE":         spec.Image,
+		"KFORGE_IMAGE_NAME":    spec.ImageName,
 		"KFORGE_MAIN_BRANCH":   spec.MainBranch,
 		"KFORGE_PLATFORMS":     strings.Join(spec.Platforms, ","),
 		"KFORGE_REGISTRY":      spec.Registry,
@@ -229,6 +231,12 @@ func githubCheckJob(spec CISpec) string {
 		"kforge version",
 	})
 	writeBlock(&b, 6, []string{
+		"- name: Resolve image name",
+		"  shell: bash",
+		"  run: |",
+	})
+	writeBlock(&b, 10, githubResolveImageCommands(spec))
+	writeBlock(&b, 6, []string{
 		"- name: Inspect project",
 		"  run: kforge detect \"$KFORGE_CONTEXT\"",
 		"- name: " + githubCheckStepName(spec),
@@ -269,6 +277,12 @@ func githubPublishJob(spec CISpec) string {
 		"export PATH=\"$HOME/.local/bin:$PATH\"",
 		"kforge version",
 	})
+	writeBlock(&b, 6, []string{
+		"- name: Resolve image name",
+		"  shell: bash",
+		"  run: |",
+	})
+	writeBlock(&b, 10, githubResolveImageCommands(spec))
 	writeBlock(&b, 6, []string{
 		"- name: Log in to GHCR",
 		"  if: env.KFORGE_REGISTRY == 'ghcr.io'",
@@ -459,6 +473,22 @@ func githubCheckCommands(spec CISpec) []string {
 	}
 	command += " \"$KFORGE_CONTEXT\""
 	return []string{command}
+}
+
+func githubResolveImageCommands(spec CISpec) []string {
+	commands := []string{
+		"IMAGE=\"$KFORGE_IMAGE\"",
+		"if [ -z \"$IMAGE\" ]; then",
+		"  OWNER_LOWER=\"$(printf '%s' \"$GITHUB_REPOSITORY_OWNER\" | tr '[:upper:]' '[:lower:]')\"",
+		"  IMAGE=\"ghcr.io/${OWNER_LOWER}/${KFORGE_IMAGE_NAME}\"",
+		"fi",
+		"echo \"KFORGE_IMAGE=$IMAGE\" >> \"$GITHUB_ENV\"",
+		"echo \"Resolved image: $IMAGE\"",
+	}
+	if spec.Registry != "" {
+		commands = append(commands, "echo \"KFORGE_REGISTRY="+spec.Registry+"\" >> \"$GITHUB_ENV\"")
+	}
+	return commands
 }
 
 func githubPublishCommands(spec CISpec) []string {

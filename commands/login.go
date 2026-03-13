@@ -97,33 +97,29 @@ func registryInfo(registry string) (string, string) {
 }
 
 func printLoginHeader(registry, label string) {
-	top := cCyan + "╔" + strings.Repeat("═", bannerWidth) + "╗" + cReset
-	bot := cCyan + "╚" + strings.Repeat("═", bannerWidth) + "╝" + cReset
-
-	title := cBold + cWhite + "KFORGE LOGIN" + cReset +
-		"  " + cDim + meta.DisplayVersion() + " · KhmerStack" + cReset
-
 	fmt.Println()
-	fmt.Println(top)
-	fmt.Println(boxLine(cCyan + "  " + cReset + title))
-	fmt.Println(cCyan + "║" + strings.Repeat("─", bannerWidth) + "║" + cReset)
-	fmt.Println(boxLine(cDim + "  Registry  " + cReset + cBlue + cBold + label + cReset))
-	if registry != "docker.io" && registry != "" {
-		fmt.Println(boxLine(cDim + "  Host      " + cReset + registry))
+	fmt.Println(boxTop())
+	fmt.Println(boxTitleLine("KFORGE LOGIN", cBold+cWhite, meta.DisplayVersion()+" · KhmerStack", cDim))
+	fmt.Println(boxDivider())
+	for _, line := range boxKeyValueLines("Registry", []string{label}, cBlue+cBold) {
+		fmt.Println(line)
 	}
-	fmt.Println(bot)
+	if registry != "docker.io" && registry != "" {
+		for _, line := range boxKeyValueLines("Host", []string{registry}, cWhite) {
+			fmt.Println(line)
+		}
+	}
+	fmt.Println(boxBottom())
 	fmt.Println()
 }
 
 func printLoginFooter(label string, elapsed time.Duration) {
-	top := cCyan + "╔" + strings.Repeat("═", bannerWidth) + "╗" + cReset
-	bot := cCyan + "╚" + strings.Repeat("═", bannerWidth) + "╝" + cReset
-	msg := cGreen + cBold + "✦  Logged in to " + label + cReset +
-		"  " + cDim + elapsed.String() + cReset
-
 	fmt.Println()
-	fmt.Println(top)
-	fmt.Println(boxLine(msg))
-	fmt.Println(bot)
+	fmt.Println(boxTop())
+	fmt.Println(boxTitleLine("LOGIN COMPLETE", cGreen+cBold, elapsed.String(), cDim))
+	for _, line := range boxKeyValueLines("Registry", []string{label}, cBlue) {
+		fmt.Println(line)
+	}
+	fmt.Println(boxBottom())
 	fmt.Println()
 }

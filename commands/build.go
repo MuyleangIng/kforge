@@ -216,32 +216,21 @@ func shortStep(s string) string {
 
 // ── Styled header / footer ────────────────────────────────────────────────────
 
-const bannerWidth = 54
-
-func boxLine(content string) string {
-	// Use visible (non-ANSI) length for correct padding
-	visible := len(stripANSI(content))
-	pad := bannerWidth - visible
-	if pad < 0 {
-		pad = 0
-	}
-	return cCyan + "║ " + cReset + content + strings.Repeat(" ", pad) + cCyan + " ║" + cReset
-}
-
 func printBuildHeader(opts *buildOptions, builderName, style string) {
-	top := cCyan + "╔" + strings.Repeat("═", bannerWidth) + "╗" + cReset
-	bot := cCyan + "╚" + strings.Repeat("═", bannerWidth) + "╝" + cReset
-
-	title := cBold + cWhite + "KFORGE BUILD" + cReset +
-		"  " + cDim + meta.DisplayVersion() + " · KhmerStack" + cReset
-
 	plats := strings.Join(opts.platforms, " · ")
 	if plats == "" {
 		plats = "native"
 	}
-	tags := strings.Join(opts.tags, "  ")
-	if tags == "" {
-		tags = cDim + "(no tag)" + cReset
+
+	tagLabel := "Tag"
+	tagStyle := cBold
+	tags := opts.tags
+	if len(tags) == 0 {
+		tags = []string{"(no tag)"}
+		tagStyle = cDim
+	}
+	if len(tags) > 1 {
+		tagLabel = "Tags"
 	}
 
 	reg := ""
@@ -250,36 +239,46 @@ func printBuildHeader(opts *buildOptions, builderName, style string) {
 	}
 
 	fmt.Println()
-	fmt.Println(top)
-	fmt.Println(boxLine(cCyan + "  " + cReset + title))
-	fmt.Println(cCyan + "║" + strings.Repeat("─", bannerWidth) + "║" + cReset)
-	fmt.Println(boxLine(cDim + "  Platform  " + cReset + cCyan + plats + cReset))
-	fmt.Println(boxLine(cDim + "  Tag       " + cReset + cBold + tags + cReset))
-	fmt.Println(boxLine(cDim + "  Progress  " + cReset + strings.ToUpper(style)))
+	fmt.Println(boxTop())
+	fmt.Println(boxTitleLine("KFORGE BUILD", cBold+cWhite, meta.DisplayVersion()+" · KhmerStack", cDim))
+	fmt.Println(boxDivider())
+	for _, line := range boxKeyValueLines("Platform", []string{plats}, cCyan) {
+		fmt.Println(line)
+	}
+	for _, line := range boxKeyValueLines(tagLabel, tags, tagStyle) {
+		fmt.Println(line)
+	}
+	for _, line := range boxKeyValueLines("Progress", []string{displayProgressStyle(style)}, cWhite) {
+		fmt.Println(line)
+	}
 	if reg != "" {
-		fmt.Println(boxLine(cDim + "  Registry  " + cReset + reg))
+		for _, line := range boxKeyValueLines("Registry", []string{reg}, cBlue) {
+			fmt.Println(line)
+		}
 	}
 	if builderName != "" {
-		fmt.Println(boxLine(cDim + "  Builder   " + cReset + builderName))
+		for _, line := range boxKeyValueLines("Builder", []string{builderName}, cWhite) {
+			fmt.Println(line)
+		}
 	}
-	fmt.Println(bot)
+	fmt.Println(boxBottom())
 	fmt.Println()
 }
 
 func printBuildFooter(elapsed time.Duration, tags []string) {
-	top := cCyan + "╔" + strings.Repeat("═", bannerWidth) + "╗" + cReset
-	bot := cCyan + "╚" + strings.Repeat("═", bannerWidth) + "╝" + cReset
-
-	msg := cGreen + cBold + "✦  BUILD COMPLETE" + cReset +
-		"  " + cDim + elapsed.String() + cReset
-
 	fmt.Println()
-	fmt.Println(top)
-	fmt.Println(boxLine(msg))
+	fmt.Println(boxTop())
+	fmt.Println(boxTitleLine("BUILD COMPLETE", cGreen+cBold, elapsed.String(), cDim))
 	if len(tags) > 0 {
-		fmt.Println(boxLine(cDim + "   " + strings.Join(tags, "  ") + cReset))
+		label := "Image"
+		if len(tags) > 1 {
+			label = "Tags"
+		}
+		for _, line := range boxKeyValueLines(label, tags, cBold) {
+			fmt.Println(line)
+		}
 	}
-	fmt.Println(bot)
+	fmt.Println(boxBottom())
 	fmt.Println()
 }
 
@@ -291,19 +290,19 @@ func detectRegistry(image string) string {
 	host, hasHost := registryHost(img)
 	switch {
 	case strings.HasPrefix(img, "ghcr.io/"):
-		return cBlue + "GitHub Container Registry (ghcr.io)" + cReset
+		return "GitHub Container Registry (ghcr.io)"
 	case strings.Contains(img, ".dkr.ecr.") && strings.Contains(img, ".amazonaws.com"):
-		return cYellow + "AWS Elastic Container Registry (ECR)" + cReset
+		return "AWS Elastic Container Registry (ECR)"
 	case hasHost && strings.HasSuffix(host, ".azurecr.io"):
-		return cBlue + "Azure Container Registry" + cReset
+		return "Azure Container Registry"
 	case strings.HasPrefix(img, "gcr.io/") || strings.Contains(img, ".pkg.dev/"):
-		return cBlue + "Google Container Registry" + cReset
+		return "Google Container Registry"
 	case !hasHost || host == "docker.io":
-		return cBlue + "Docker Hub" + cReset
+		return "Docker Hub"
 	case host == "localhost" || strings.HasPrefix(host, "localhost:"):
-		return cBlue + "Local registry (" + host + ")" + cReset
+		return "Local registry (" + host + ")"
 	default:
-		return cGray + "Custom registry (" + host + ")" + cReset
+		return "Custom registry (" + host + ")"
 	}
 }
 
